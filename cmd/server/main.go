@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"flag"
 	"github.com/dgrijalva/jwt-go"
+	gauth "github.com/globbie/gnode/pkg/auth"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -15,9 +16,12 @@ import (
 
 var (
 	listenAddr string
-	users      map[string]*Credentials
 	VerifyKey  *rsa.PublicKey
 	SignKey    *rsa.PrivateKey
+)
+
+var (
+	Auth = gauth.New()
 )
 
 func init() {
@@ -46,15 +50,17 @@ func init() {
 		log.Fatalln(err)
 	}
 
-	users = make(map[string]*Credentials)
 }
 
 func main() {
-	router := http.NewServeMux()
+	Auth.URLPrefix = "/auth/"
 
-	router.Handle("/register", registerHandler())
-	router.Handle("/login", loginHandler())
-	router.Handle("/secret", auth(secretHandler()))
+	router := http.NewServeMux()
+	router.Handle("/auth/", Auth.NewServeMux())
+
+	//router.Handle("/register", registerHandler())
+	//router.Handle("/login", loginHandler())
+	//router.Handle("/secret", Auth(secretHandler()))
 
 	server := &http.Server{
 		Addr:         listenAddr,

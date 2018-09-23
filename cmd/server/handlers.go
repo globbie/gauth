@@ -1,14 +1,11 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
-	"golang.org/x/crypto/bcrypt"
+	//"github.com/globbie/gnode/cmd/server/encryptionSchemes"
 	"log"
 	"net/http"
-	"time"
 )
 
 type Token struct {
@@ -18,6 +15,12 @@ type Token struct {
 type Credentials struct {
 	Email             string
 	EncryptedPassword []byte
+	//EncryptionScheme EncryptionScheme
+}
+
+type Claims struct {
+	*jwt.StandardClaims
+	email string
 }
 
 func logger(h http.Handler) http.Handler {
@@ -41,6 +44,18 @@ func auth(h http.Handler) http.Handler {
 	})
 }
 
+/*
+func createToken(email string) (string, error) {
+	token := jwt.New(jwt.GetSigningMethod("RS256"))
+	token.Claims = &Claims{
+		&jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Minute * 5).Unix(),
+		},
+		email,
+	}
+	return token.SignedString(SignKey)
+}
+
 func registerHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authInfo := &Credentials{}
@@ -62,16 +77,7 @@ func registerHandler() http.Handler {
 
 		users[email] = authInfo
 
-		signer := jwt.New(jwt.GetSigningMethod("RS256"))
-		claims := make(jwt.MapClaims)
-		claims["sub"] = email
-		claims["exp"] = time.Now().Add(time.Minute * 20).Unix()
-		claims["CustomUserInfo"] = struct {
-			email string
-		}{email}
-		signer.Claims = claims
-
-		token, err := signer.SignedString(SignKey)
+		token, err := createToken(email)
 		if err != nil {
 			log.Println("failed to create token", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -98,3 +104,4 @@ func secretHandler() http.Handler {
 		fmt.Fprintln(w, "hello, user with valid token!")
 	})
 }
+*/
