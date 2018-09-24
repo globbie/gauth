@@ -6,7 +6,7 @@ type bcryptScheme struct {
 	cost int
 }
 
-func New(cost int) *bcryptScheme{
+func New(cost int) *bcryptScheme {
 	if cost <= 0 {
 		cost = bcrypt.DefaultCost
 	}

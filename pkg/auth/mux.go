@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"github.com/globbie/gnode/pkg/auth/ctx"
 	"net/http"
 	"strings"
 )
@@ -28,16 +29,21 @@ func (mux *serveMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	ctx := &ctx.Ctx{
+		W:         w,
+		R:         r,
+		SignKey:   mux.SignKey,
+		VerifyKey: mux.VerifyKey,
+	}
+
 	switch paths[0] {
 	case "login":
-		provider.Login()
+		provider.Login(ctx)
 	case "logout":
-		provider.Logout()
+		provider.Logout(ctx)
 	case "register":
-		provider.Register()
+		provider.Register(ctx)
 	default:
 		http.NotFound(w, r)
 	}
-
-	_ = provider
 }

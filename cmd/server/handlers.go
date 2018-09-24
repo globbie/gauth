@@ -1,27 +1,11 @@
 package main
 
 import (
-	"github.com/dgrijalva/jwt-go"
-	"github.com/dgrijalva/jwt-go/request"
+	"fmt"
 	//"github.com/globbie/gnode/cmd/server/encryptionSchemes"
 	"log"
 	"net/http"
 )
-
-type Token struct {
-	Token string `json:"token"`
-}
-
-type Credentials struct {
-	Email             string
-	EncryptedPassword []byte
-	//EncryptionScheme EncryptionScheme
-}
-
-type Claims struct {
-	*jwt.StandardClaims
-	email string
-}
 
 func logger(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -30,78 +14,8 @@ func logger(h http.Handler) http.Handler {
 	})
 }
 
-func auth(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor, func(token *jwt.Token) (interface{}, error) {
-			return VerifyKey, nil
-		})
-		if err != nil {
-			http.Error(w, "Invalid token", http.StatusUnauthorized)
-			return
-		}
-		log.Println("welcome:", token.Claims)
-		h.ServeHTTP(w, r)
-	})
-}
-
-/*
-func createToken(email string) (string, error) {
-	token := jwt.New(jwt.GetSigningMethod("RS256"))
-	token.Claims = &Claims{
-		&jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Minute * 5).Unix(),
-		},
-		email,
-	}
-	return token.SignedString(SignKey)
-}
-
-func registerHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authInfo := &Credentials{}
-
-		email := r.URL.Query().Get("email")
-		if email == "" {
-			http.Error(w, "email is not set", http.StatusBadRequest)
-			return
-		}
-		password := r.URL.Query().Get("password")
-		if password == "" {
-			http.Error(w, "password is not set", http.StatusBadRequest)
-			return
-		}
-		encryptedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-
-		authInfo.Email = email
-		authInfo.EncryptedPassword = encryptedPassword
-
-		users[email] = authInfo
-
-		token, err := createToken(email)
-		if err != nil {
-			log.Println("failed to create token", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		response, err := json.Marshal(Token{token})
-		if err != nil {
-			http.Error(w, "intertal server error", http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(response)
-	})
-}
-
-func loginHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-	})
-}
-
 func secretHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "hello, user with valid token!")
 	})
 }
-*/
