@@ -29,7 +29,7 @@ func (mux *serveMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ctx := &ctx.Ctx{
+	context := &ctx.Ctx{
 		W:         w,
 		R:         r,
 		SignKey:   mux.SignKey,
@@ -38,11 +38,11 @@ func (mux *serveMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch paths[0] {
 	case "login":
-		provider.Login(ctx)
+		provider.Login(context)
 	case "logout":
-		provider.Logout(ctx)
+		provider.Logout(context)
 	case "register":
-		provider.Register(ctx)
+		provider.Register(context)
 	default:
 		http.NotFound(w, r)
 	}

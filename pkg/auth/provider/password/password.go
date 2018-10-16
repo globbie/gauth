@@ -5,17 +5,13 @@ import (
 	"encoding/json"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/globbie/gnode/pkg/auth/ctx"
-	"golang.org/x/crypto/bcrypt"
+	"github.com/globbie/gnode/pkg/auth/provider/password/encryptionSchemes"
+	"github.com/globbie/gnode/pkg/auth/storage"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
-
-type Credentials struct {
-	Email             string
-	EncryptedPassword []byte
-	//EncryptionScheme EncryptionScheme
-}
 
 type Token struct {
 	Token string `json:"token"`
@@ -27,10 +23,11 @@ type Claims struct {
 }
 
 type Provider struct {
+	storage storage.Storage
 }
 
-func NewProvider() *Provider {
-	return &Provider{}
+func NewProvider(s storage.Storage) *Provider {
+	return &Provider{storage: s}
 }
 
 func (p *Provider) Login(ctx *ctx.Ctx) {
@@ -43,51 +40,69 @@ func (p *Provider) Logout(ctx *ctx.Ctx) {
 	// nothing to do here
 }
 
-func (p *Provider) Register(ctx *ctx.Ctx) {
-	authInfo := &Credentials{}
+func (p *Provider) Register(c *ctx.Ctx) {
+	authInfo := &storage.UserCredentials{}
 
-	email := ctx.R.URL.Query().Get("email")
+	log.Println("3", c.R)
+	err := c.R.ParseForm()
+	if err != nil {
+		http.Error(c.W, "internal server error", http.StatusInternalServerError)
+	}
+	log.Println("4", c.R.Form)
+
+
+	email := strings.TrimSpace(c.R.Form.Get("login"))
+	password := strings.TrimSpace(c.R.Form.Get("password"))
+
 	if email == "" {
-		http.Error(ctx.W, "email is not set", http.StatusBadRequest)
+		log.Println("login is not set")
+		http.Error(c.W, "login is not set", http.StatusBadRequest)
 		return
 	}
-	password := ctx.R.URL.Query().Get("password")
 	if password == "" {
-		http.Error(ctx.W, "password is not set", http.StatusBadRequest)
+		log.Println("password is not set")
+		http.Error(c.W, "password is not set", http.StatusBadRequest)
 		return
 	}
-	// todo: use encryption scheme
-	encryptedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	authInfo.Email = email
+	encryptedPassword, err := encryptionSchemes.DefaultEncryptionScheme.Encrypt(password)
+	if err != nil {
+		log.Println("failed to encrypt password:", err)
+		http.Error(c.W, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	authInfo.UID = email
 	authInfo.EncryptedPassword = encryptedPassword
+	authInfo.EncryptionScheme = encryptionSchemes.DefaultEncryptionScheme
 
-	token, err := createToken(email, ctx.SignKey)
+	// 1. try to create user in storage
+	// 2. get reply from storage
+	// 3. create JWT
+
+	token, err := createToken(email, c.SignKey)
 	if err != nil {
 		log.Println("failed to create token", err)
-		http.Error(ctx.W, "internal error", http.StatusInternalServerError)
+		http.Error(c.W, "internal error", http.StatusInternalServerError)
 		return
 	}
-
-	//users[email] = authInfo
-	// todo: create gsl user struct and validate it with knowdy
-
 	response, err := json.Marshal(Token{token})
 	if err != nil {
-		http.Error(ctx.W, "intertal server error", http.StatusInternalServerError)
+		log.Print("failed to marshal json:", err)
+		http.Error(c.W, "internal server error", http.StatusInternalServerError)
 		return
 	}
-	ctx.W.WriteHeader(http.StatusOK)
-	ctx.W.Header().Set("Content-Type", "application/json")
-	ctx.W.Write(response)
+	c.W.WriteHeader(http.StatusOK)
+	c.W.Header().Set("Content-Type", "application/json")
+	c.W.Write(response)
 }
 
 func createToken(email string, signKey *rsa.PrivateKey) (string, error) {
+	// todo: make signing method configurable
 	token := jwt.New(jwt.GetSigningMethod("RS256"))
 	token.Claims = &Claims{
-		&jwt.StandardClaims{
+		StandardClaims: &jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(time.Minute * 1).Unix(),
 		},
-		email,
+		email: email,
 	}
 	return token.SignedString(signKey)
 }

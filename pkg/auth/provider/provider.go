@@ -1,4 +1,4 @@
-package auth
+package provider
 
 import (
 	"github.com/globbie/gnode/pkg/auth/ctx"

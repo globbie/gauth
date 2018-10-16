@@ -5,4 +5,4 @@ type EncryptionScheme interface {
 	Compare(encryptedPassword, password string) bool
 }
 
-var defaultEncryptionScheme EncryptionScheme = New(10)
+var DefaultEncryptionScheme EncryptionScheme = New(10)

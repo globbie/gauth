@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
+	"github.com/globbie/gnode/pkg/auth/provider"
 	"github.com/globbie/gnode/pkg/auth/provider/password"
 	"log"
 	"net/http"
@@ -13,8 +14,8 @@ import (
 type Auth struct {
 	URLPrefix string
 
-	idProviders     map[string]IdentityProvider
-	defaultProvider IdentityProvider
+	idProviders     map[string]provider.IdentityProvider
+	defaultProvider provider.IdentityProvider
 
 	VerifyKey *rsa.PublicKey
 	SignKey   *rsa.PrivateKey
@@ -22,7 +23,7 @@ type Auth struct {
 
 func New(VerifyKey *rsa.PublicKey, SignKey *rsa.PrivateKey) *Auth {
 	auth := &Auth{
-		idProviders: make(map[string]IdentityProvider),
+		idProviders: make(map[string]provider.IdentityProvider),
 		VerifyKey:   VerifyKey,
 		SignKey:     SignKey,
 	}
@@ -37,7 +38,7 @@ func (a *Auth) NewServeMux() http.Handler {
 	return &serveMux{a}
 }
 
-func (a *Auth) GetIdentityProvider(name string) (IdentityProvider, error) {
+func (a *Auth) GetIdentityProvider(name string) (provider.IdentityProvider, error) {
 	provider, ok := a.idProviders[name]
 	if !ok {
 		return nil, errors.New("provider not found")
@@ -45,7 +46,7 @@ func (a *Auth) GetIdentityProvider(name string) (IdentityProvider, error) {
 	return provider, nil
 }
 
-func (a *Auth) AddIdentityProvider(name string, provider IdentityProvider) {
+func (a *Auth) AddIdentityProvider(name string, provider provider.IdentityProvider) {
 	_, ok := a.idProviders[name]
 	if ok {
 		log.Fatalf("provider %v is already registered", name)
