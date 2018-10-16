@@ -8,7 +8,7 @@ import (
 type Storage interface {
 	Close() error
 
-	UserCreate(c *UserCredentials) error
+	UserCreate(c UserCredentials) error
 	UserRead(uid string) (UserCredentials, error)
 	UserUpdate(uid string, updater func (c UserCredentials) (UserCredentials, error)) error
 	UserDelete(uid string) error

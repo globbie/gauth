@@ -5,12 +5,12 @@ import (
 )
 
 type MemoryStorage struct {
-	data map[string]*storage.UserCredentials
+	data map[string]storage.UserCredentials
 }
 
 func New() *MemoryStorage {
 	s := MemoryStorage{}
-	s.data = make(map[string]*storage.UserCredentials)
+	s.data = make(map[string]storage.UserCredentials)
 	return &s
 }
 
@@ -18,7 +18,7 @@ func (s *MemoryStorage) Close() error {
 	return nil
 }
 
-func (s *MemoryStorage) UserCreate(c *storage.UserCredentials) error {
+func (s *MemoryStorage) UserCreate(c storage.UserCredentials) error {
 	_, ok := s.data[c.UID]
 	if ok {
 		return storage.ErrAlreadyExists
@@ -27,8 +27,13 @@ func (s *MemoryStorage) UserCreate(c *storage.UserCredentials) error {
 	return nil
 }
 
-func (s *MemoryStorage) UserRead(uid string) (storage.UserCredentials, error) {
-	return storage.UserCredentials{}, storage.ErrNotImplemented
+func (s *MemoryStorage) UserRead(uid string) (u storage.UserCredentials, err error) {
+	u, ok := s.data[uid]
+	if !ok {
+		err = storage.ErrNotFound
+		return
+	}
+	return
 }
 
 func (s *MemoryStorage) UserUpdate(uid string, updater func(c storage.UserCredentials) (storage.UserCredentials, error)) error {
@@ -36,5 +41,11 @@ func (s *MemoryStorage) UserUpdate(uid string, updater func(c storage.UserCreden
 }
 
 func (s *MemoryStorage) UserDelete(uid string) error {
-	return storage.ErrNotImplemented
+	_, ok := s.data[uid]
+	if !ok {
+		return storage.ErrNotFound
+	}
+	delete(s.data, uid)
+	return nil
 }
+
