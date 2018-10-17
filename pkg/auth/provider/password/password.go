@@ -95,6 +95,9 @@ func (p *Provider) Register(c *ctx.Ctx) {
 	c.W.Write(response)
 }
 
+func (p *Provider) Callback(ctx *ctx.Ctx) {
+}
+
 func createToken(email string, signKey *rsa.PrivateKey) (string, error) {
 	// todo: make signing method configurable
 	token := jwt.New(jwt.GetSigningMethod("RS256"))
@@ -106,3 +109,4 @@ func createToken(email string, signKey *rsa.PrivateKey) (string, error) {
 	}
 	return token.SignedString(signKey)
 }
+

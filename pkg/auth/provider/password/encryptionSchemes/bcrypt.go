@@ -27,3 +27,7 @@ func (e *bcryptScheme) Compare(encryptedPassword, password string) bool {
 	}
 	return true
 }
+
+func (e *bcryptScheme) ToString() string {
+	return ""
+}
