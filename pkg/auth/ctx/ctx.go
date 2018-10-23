@@ -13,5 +13,5 @@ type Ctx struct {
 	VerifyKey *rsa.PublicKey
 	SignKey   *rsa.PrivateKey
 
-	storage   *storage.Storage
+	storage *storage.Storage
 }

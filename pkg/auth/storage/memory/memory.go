@@ -48,4 +48,3 @@ func (s *MemoryStorage) UserDelete(uid string) error {
 	delete(s.data, uid)
 	return nil
 }
-

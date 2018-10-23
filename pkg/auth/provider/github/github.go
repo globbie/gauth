@@ -62,4 +62,3 @@ func (p *Provider) Callback(ctx *ctx.Ctx) {
 	// todo: store token for later use
 	// todo: redirect and issue jwt for user if needed
 }
-

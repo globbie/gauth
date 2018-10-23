@@ -10,12 +10,12 @@ type Storage interface {
 
 	UserCreate(c UserCredentials) error
 	UserRead(uid string) (UserCredentials, error)
-	UserUpdate(uid string, updater func (c UserCredentials) (UserCredentials, error)) error
+	UserUpdate(uid string, updater func(c UserCredentials) (UserCredentials, error)) error
 	UserDelete(uid string) error
 }
 
 type UserCredentials struct {
-	UID               string
+	UID string
 
 	// fixme: this fields breaks encapsulation
 	EncryptedPassword string
@@ -23,7 +23,7 @@ type UserCredentials struct {
 }
 
 var (
-	ErrNotFound = errors.New("not found")
+	ErrNotFound      = errors.New("not found")
 	ErrAlreadyExists = errors.New("already exists")
 
 	ErrNotImplemented = errors.New("not implemented")

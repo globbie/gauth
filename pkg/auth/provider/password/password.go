@@ -50,7 +50,6 @@ func (p *Provider) Register(c *ctx.Ctx) {
 	}
 	log.Println("4", c.R.Form)
 
-
 	email := strings.TrimSpace(c.R.Form.Get("login"))
 	password := strings.TrimSpace(c.R.Form.Get("password"))
 
@@ -109,4 +108,3 @@ func createToken(email string, signKey *rsa.PrivateKey) (string, error) {
 	}
 	return token.SignedString(signKey)
 }
-

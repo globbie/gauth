@@ -20,7 +20,7 @@ func TestRegister(t *testing.T) {
 	provider := NewProvider(nil)
 
 	form := url.Values{
-		"login": {"test@example.com"},
+		"login":    {"test@example.com"},
 		"password": {"password"},
 	}
 	req, err := http.NewRequest("POST", "/register", strings.NewReader(form.Encode()))
@@ -32,9 +32,9 @@ func TestRegister(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c := ctx.Ctx{
-			W:w,
-			R:r,
-			SignKey: nil,
+			W:         w,
+			R:         r,
+			SignKey:   nil,
 			VerifyKey: nil,
 		}
 		provider.Register(&c)
