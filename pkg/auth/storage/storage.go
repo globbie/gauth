@@ -8,10 +8,18 @@ import (
 type Storage interface {
 	Close() error
 
-	UserCreate(c UserCredentials) error
-	UserRead(uid string) (UserCredentials, error)
-	UserUpdate(uid string, updater func(c UserCredentials) (UserCredentials, error)) error
-	UserDelete(uid string) error
+	ProviderCreate(pid string) error
+	//ProviderDelete(pid string) error
+	//ProviderList() error
+
+	UserCreate(pid string, c Credentials) error
+	UserRead(pid string, uid string) (Credentials, error)
+	UserUpdate(pid string, uid string, updater func(c Credentials) (Credentials, error)) error
+	UserDelete(pid string, uid string) error
+}
+
+type Credentials interface {
+	UID() string
 }
 
 type UserCredentials struct {
@@ -25,6 +33,5 @@ type UserCredentials struct {
 var (
 	ErrNotFound      = errors.New("not found")
 	ErrAlreadyExists = errors.New("already exists")
-
 	ErrNotImplemented = errors.New("not implemented")
 )

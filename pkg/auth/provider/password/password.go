@@ -43,16 +43,13 @@ func (p *Provider) Logout(ctx *ctx.Ctx) {
 func (p *Provider) Register(c *ctx.Ctx) {
 	authInfo := &storage.UserCredentials{}
 
-	log.Println("3", c.R)
 	err := c.R.ParseForm()
 	if err != nil {
 		http.Error(c.W, "internal server error", http.StatusInternalServerError)
 	}
-	log.Println("4", c.R.Form)
 
 	email := strings.TrimSpace(c.R.Form.Get("login"))
 	password := strings.TrimSpace(c.R.Form.Get("password"))
-
 	if email == "" {
 		log.Println("login is not set")
 		http.Error(c.W, "login is not set", http.StatusBadRequest)
@@ -73,6 +70,7 @@ func (p *Provider) Register(c *ctx.Ctx) {
 	authInfo.EncryptedPassword = encryptedPassword
 	authInfo.EncryptionScheme = encryptionSchemes.DefaultEncryptionScheme
 
+	err = p.storage.UserCreate(storage.UserCredentials{})
 	// 1. try to create user in storage
 	// 2. get reply from storage
 	// 3. create JWT

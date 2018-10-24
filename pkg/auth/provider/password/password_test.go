@@ -1,8 +1,11 @@
 package password
 
 import (
+	"crypto/rsa"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/globbie/gnode/pkg/auth/ctx"
-	//"github.com/globbie/gnode/pkg/auth/storage/knowdy"
+	"github.com/globbie/gnode/pkg/auth/storage/memory"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10,12 +13,30 @@ import (
 	"testing"
 )
 
+func getKeysPair(t *testing.T) (privateKey *rsa.PrivateKey, publicKey *rsa.PublicKey) {
+	bytes, err := ioutil.ReadFile("testdata/example.rsa")
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateKey, err = jwt.ParseRSAPrivateKeyFromPEM(bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bytes, err = ioutil.ReadFile("testdata/example.rsa.pub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, err = jwt.ParseRSAPublicKeyFromPEM(bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return
+}
+
 func TestRegister(t *testing.T) {
-	//storage, err := knowdyStorage.New("")
-	//if err != nil {
-	//	t.Error("could not create storage:", err)
-	//}
-	//defer storage.Close()
+	storage := memoryStorage.New()
+	defer storage.Close()
+	privateKey, publicKey := getKeysPair(t)
 
 	provider := NewProvider(nil)
 
@@ -34,8 +55,8 @@ func TestRegister(t *testing.T) {
 		c := ctx.Ctx{
 			W:         w,
 			R:         r,
-			SignKey:   nil,
-			VerifyKey: nil,
+			SignKey:   privateKey,
+			VerifyKey: publicKey,
 		}
 		provider.Register(&c)
 	})

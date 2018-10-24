@@ -7,6 +7,7 @@ import (
 	"github.com/dgrijalva/jwt-go/request"
 	"github.com/globbie/gnode/pkg/auth/provider"
 	"github.com/globbie/gnode/pkg/auth/provider/password"
+	"github.com/globbie/gnode/pkg/auth/storage"
 	"log"
 	"net/http"
 )
@@ -21,14 +22,14 @@ type Auth struct {
 	SignKey   *rsa.PrivateKey
 }
 
-func New(VerifyKey *rsa.PublicKey, SignKey *rsa.PrivateKey) *Auth {
+func New(verifyKey *rsa.PublicKey, signKey *rsa.PrivateKey, storage storage.Storage) *Auth {
 	auth := &Auth{
 		idProviders: make(map[string]provider.IdentityProvider),
-		VerifyKey:   VerifyKey,
-		SignKey:     SignKey,
+		VerifyKey:   verifyKey,
+		SignKey:     signKey,
 	}
 
-	auth.defaultProvider = password.NewProvider()
+	auth.defaultProvider = password.NewProvider(storage)
 	auth.AddIdentityProvider("password", auth.defaultProvider)
 
 	return auth
@@ -39,11 +40,11 @@ func (a *Auth) NewServeMux() http.Handler {
 }
 
 func (a *Auth) GetIdentityProvider(name string) (provider.IdentityProvider, error) {
-	provider, ok := a.idProviders[name]
+	p, ok := a.idProviders[name]
 	if !ok {
-		return nil, errors.New("provider not found")
+		return nil, errors.New("p not found")
 	}
-	return provider, nil
+	return p, nil
 }
 
 func (a *Auth) AddIdentityProvider(name string, provider provider.IdentityProvider) {

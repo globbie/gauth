@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rsa"
 	"flag"
+	"github.com/globbie/gnode/pkg/auth/storage/memory"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -49,7 +50,8 @@ func init() {
 }
 
 func main() {
-	Auth := gauth.New(VerifyKey, SignKey)
+	storage := memoryStorage.New()
+	Auth := gauth.New(VerifyKey, SignKey, storage)
 	Auth.URLPrefix = "/auth/"
 
 	router := http.NewServeMux()
