@@ -38,7 +38,7 @@ func TestRegister(t *testing.T) {
 	defer storage.Close()
 	privateKey, publicKey := getKeysPair(t)
 
-	provider := NewProvider(nil)
+	provider := NewProvider(storage)
 
 	form := url.Values{
 		"login":    {"test@example.com"},

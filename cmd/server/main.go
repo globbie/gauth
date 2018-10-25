@@ -27,8 +27,8 @@ func init() {
 	var err error
 
 	flag.StringVar(&listenAddr, "listen-addr", "0.0.0.0:8081", "server listen address")
-	flag.StringVar(&verifyKeyPath, "public-key-path", "", "verify key path")
-	flag.StringVar(&signedKeyPath, "signed-key-path", "", "signed key path")
+	flag.StringVar(&verifyKeyPath, "public-key-path", "example.rsa.pub", "verify key path")
+	flag.StringVar(&signedKeyPath, "signed-key-path", "example.rsa", "signed key path")
 	flag.Parse()
 
 	verifyBytes, err := ioutil.ReadFile(verifyKeyPath)

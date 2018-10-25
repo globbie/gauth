@@ -2,7 +2,6 @@ package storage
 
 import (
 	"errors"
-	"github.com/globbie/gnode/pkg/auth/provider/password/encryptionSchemes"
 )
 
 type Storage interface {
@@ -20,14 +19,6 @@ type Storage interface {
 
 type Credentials interface {
 	UID() string
-}
-
-type UserCredentials struct {
-	UID string
-
-	// fixme: this fields breaks encapsulation
-	EncryptedPassword string
-	EncryptionScheme  encryptionSchemes.EncryptionScheme
 }
 
 var (
