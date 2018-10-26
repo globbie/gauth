@@ -2,6 +2,7 @@ package password
 
 import (
 	"crypto/rsa"
+	"encoding/json"
 	"errors"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/globbie/gnode/pkg/auth/ctx"
@@ -14,6 +15,9 @@ import (
 )
 
 const providerID = "password-provider"
+
+type Config struct {
+}
 
 type Token struct {
 	Token string `json:"token"`

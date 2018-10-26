@@ -65,3 +65,12 @@ func (s *MemoryStorage) UserDelete(pid string, uid string) error {
 	delete(providerData, uid)
 	return nil
 }
+
+type Config struct {
+}
+
+func (c *Config) New() (storage.Storage, error) {
+	s := MemoryStorage{}
+	s.data = make(map[string]map[string]storage.Credentials)
+	return &s, nil
+}

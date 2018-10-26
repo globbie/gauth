@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/globbie/gnode/pkg/auth/ctx"
 	"github.com/globbie/gnode/pkg/auth/storage"
+	goGithub "github.com/google/go-github/github"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 	"log"
@@ -13,6 +14,12 @@ import (
 type Provider struct {
 	storage     storage.Storage
 	oauthConfig oauth2.Config
+	state       string
+}
+
+type Config struct {
+	ClientID     string `json:"client-id"`
+	ClientSecret string `json:"client-secret"`
 }
 
 func NewProvider(s storage.Storage) *Provider {
@@ -24,14 +31,13 @@ func NewProvider(s storage.Storage) *Provider {
 			Scopes:       []string{},
 			Endpoint:     github.Endpoint,
 		},
+		state: "random-string", // todo: this should be a random string
 	}
 	return &p
 }
 
 func (p *Provider) Login(ctx *ctx.Ctx) {
-	// todo: set state
-	// todo: use AccessTypeOffLine
-	url := p.oauthConfig.AuthCodeURL("", oauth2.AccessTypeOnline)
+	url := p.oauthConfig.AuthCodeURL(p.state, oauth2.AccessTypeOnline) // todo: use AccessTypeOffLine
 	http.Redirect(ctx.W, ctx.R, url, http.StatusFound)
 }
 
@@ -42,23 +48,35 @@ func (p *Provider) Register(ctx *ctx.Ctx) {
 }
 
 func (p *Provider) Callback(ctx *ctx.Ctx) {
-	req := ctx.R
-
-	state := req.FormValue("state")
-	_ = state // todo: check state
-
-	code := req.FormValue("code")
+	var (
+		w = ctx.W
+		r = ctx.R
+	)
+	state := r.FormValue("state")
+	if state != p.state {
+		log.Printf("oauth state does not match, expected '%s', got '%s'\n", p.state, state)
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+	code := r.FormValue("code")
 	token, err := p.oauthConfig.Exchange(context.TODO(), code)
 	if err != nil {
 		log.Printf("failed to get token, error: '%v'", err)
-		http.Error(ctx.W, "failed to authorize", http.StatusUnauthorized)
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
-	_ = token
-
-	// todo: get user info
+	client := p.oauthConfig.Client(context.TODO(), token)
+	githubClient := goGithub.NewClient(client)
+	user, _, err := githubClient.Users.Get(context.TODO(), "")
+	if err != nil {
+		log.Println("failed to get github user info, error:", err)
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+	_ = user
 	// todo: find user in storage
 	// todo: create user if not exists
 	// todo: store token for later use
 	// todo: redirect and issue jwt for user if needed
+	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }

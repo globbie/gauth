@@ -22,7 +22,7 @@ type Credentials interface {
 }
 
 var (
-	ErrNotFound      = errors.New("not found")
-	ErrAlreadyExists = errors.New("already exists")
+	ErrNotFound       = errors.New("not found")
+	ErrAlreadyExists  = errors.New("already exists")
 	ErrNotImplemented = errors.New("not implemented")
 )

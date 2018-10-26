@@ -22,10 +22,34 @@ func (s *KnowdyStorage) Close() error {
 	return s.Del()
 }
 
-func (s *KnowdyStorage) CreateUserRequest(u *storage.UserCredentials) error {
+func (s *KnowdyStorage) ProviderCreate(pid string) error {
 	return errors.New("not implemented")
 }
 
-func (s *KnowdyStorage) DeleteUserRequest(u *storage.UserCredentials) error {
+func (s *KnowdyStorage) UserCreate(pid string, c storage.Credentials) error {
 	return errors.New("not implemented")
+}
+
+func (s *KnowdyStorage) UserRead(pid string, uid string) (storage.Credentials, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (s *KnowdyStorage) UserUpdate(pid string, uid string, updater func(c storage.Credentials) (storage.Credentials, error)) error {
+	return errors.New("not implemented")
+}
+
+func (s *KnowdyStorage) UserDelete(pid string, uid string) error {
+	return errors.New("not implemented")
+}
+
+type Config struct {
+	ConfigPath string `json:"config-path"`
+}
+
+func (c *Config) New() (storage.Storage, error) {
+	shard, err := knowdy.New(c.ConfigPath)
+	if err != nil {
+		return nil, err
+	}
+	return &KnowdyStorage{Shard: shard}, nil
 }

@@ -28,14 +28,12 @@ func (mux *serveMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
 	context := &ctx.Ctx{
 		W:         w,
 		R:         r,
 		SignKey:   mux.SignKey,
 		VerifyKey: mux.VerifyKey,
 	}
-
 	switch paths[0] {
 	case "login":
 		provider.Login(context)
@@ -43,6 +41,8 @@ func (mux *serveMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		provider.Logout(context)
 	case "register":
 		provider.Register(context)
+	case "callback":
+		provider.Callback(context)
 	default:
 		http.NotFound(w, r)
 	}

@@ -3,45 +3,48 @@ package main
 import (
 	"context"
 	"crypto/rsa"
+	"encoding/json"
 	"flag"
-	"github.com/globbie/gnode/pkg/auth/storage/memory"
+	"github.com/dgrijalva/jwt-go"
+	"github.com/globbie/gnode/pkg/auth"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
-
-	"github.com/dgrijalva/jwt-go"
-	gauth "github.com/globbie/gnode/pkg/auth"
 )
 
 var (
-	listenAddr string
-	VerifyKey  *rsa.PublicKey
-	SignKey    *rsa.PrivateKey
+	VerifyKey *rsa.PublicKey
+	SignKey   *rsa.PrivateKey
+	cfg       Config
 )
 
 func init() {
-	var verifyKeyPath, signedKeyPath string
-	var err error
-
-	flag.StringVar(&listenAddr, "listen-addr", "0.0.0.0:8081", "server listen address")
-	flag.StringVar(&verifyKeyPath, "public-key-path", "example.rsa.pub", "verify key path")
-	flag.StringVar(&signedKeyPath, "signed-key-path", "example.rsa", "signed key path")
+	var configPath string
+	flag.StringVar(&configPath, "config-path", "config.json", "path to config file")
 	flag.Parse()
 
-	verifyBytes, err := ioutil.ReadFile(verifyKeyPath)
+	configData, err := ioutil.ReadFile(configPath)
 	if err != nil {
-		log.Fatalln("could not open VerifyKey file:", err)
+		log.Fatalln("could not open config file,", err)
 	}
-	signBytes, err := ioutil.ReadFile(signedKeyPath)
+	err = json.Unmarshal(configData, &cfg)
+	if err != nil {
+		log.Fatalf("could not parse config file '%s', error: %v", configPath, err)
+	}
+	signBytes, err := ioutil.ReadFile(cfg.Token.PublicKeyPath)
 	if err != nil {
 		log.Fatalln("could not open SignKey file:", err)
 	}
 	SignKey, err = jwt.ParseRSAPrivateKeyFromPEM(signBytes)
 	if err != nil {
 		log.Fatalln(err)
+	}
+	verifyBytes, err := ioutil.ReadFile(cfg.Token.PrivateKeyPath)
+	if err != nil {
+		log.Fatalln("could not open VerifyKey file:", err)
 	}
 	VerifyKey, err = jwt.ParseRSAPublicKeyFromPEM(verifyBytes)
 	if err != nil {
@@ -50,16 +53,22 @@ func init() {
 }
 
 func main() {
-	storage := memoryStorage.New()
-	Auth := gauth.New(VerifyKey, SignKey, storage)
-	Auth.URLPrefix = "/auth/"
+	storage, err := cfg.Storage.Config.New()
+	if err != nil {
+		log.Fatalln("could not create storage, error:", err)
+	}
+	for i, p := range cfg.Providers {
+		log.Printf("provider[%v]: %v\n", i, p.Type)
+	}
+	Auth := auth.New(VerifyKey, SignKey, storage)
+	Auth.URLPrefix = "/auth/" // todo
 
 	router := http.NewServeMux()
 	router.Handle("/auth/", Auth.NewServeMux())
 	router.Handle("/secret", Auth.AuthHandler(secretHandler()))
 
 	server := &http.Server{
-		Addr:         listenAddr,
+		Addr:         cfg.Web.HTTPAddress,
 		Handler:      logger(router),
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 5 * time.Second,
@@ -84,9 +93,9 @@ func main() {
 		close(done)
 	}()
 
-	log.Println("server is ready to handle request at:", listenAddr)
+	log.Println("server is ready to handle requests at:", cfg.Web.HTTPAddress)
 
-	err := server.ListenAndServe()
+	err = server.ListenAndServe()
 	if err != nil && err != http.ErrServerClosed {
 		log.Fatalf("could not listen on %s, err: %v\n", server.Addr, err)
 	}

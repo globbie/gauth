@@ -10,3 +10,7 @@ type IdentityProvider interface {
 	Register(ctx *ctx.Ctx)
 	Callback(ctx *ctx.Ctx)
 }
+
+type Config interface {
+	//Open(name string) (IdentityProvider, error)
+}
