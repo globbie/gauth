@@ -6,7 +6,6 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
 	"github.com/globbie/gnode/pkg/auth/provider"
-	"github.com/globbie/gnode/pkg/auth/provider/password"
 	"github.com/globbie/gnode/pkg/auth/storage"
 	"log"
 	"net/http"
@@ -22,16 +21,13 @@ type Auth struct {
 	SignKey   *rsa.PrivateKey
 }
 
+// todo: delete this factory
 func New(verifyKey *rsa.PublicKey, signKey *rsa.PrivateKey, storage storage.Storage) *Auth {
 	auth := &Auth{
 		idProviders: make(map[string]provider.IdentityProvider),
 		VerifyKey:   verifyKey,
 		SignKey:     signKey,
 	}
-
-	auth.defaultProvider = password.NewProvider(storage)
-	auth.AddIdentityProvider("password", auth.defaultProvider)
-
 	return auth
 }
 

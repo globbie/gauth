@@ -67,6 +67,7 @@ func (s *MemoryStorage) UserDelete(pid string, uid string) error {
 }
 
 type Config struct {
+	// there is nothing to config
 }
 
 func (c *Config) New() (storage.Storage, error) {

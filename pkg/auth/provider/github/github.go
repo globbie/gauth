@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"github.com/globbie/gnode/pkg/auth/ctx"
+	"github.com/globbie/gnode/pkg/auth/provider"
 	"github.com/globbie/gnode/pkg/auth/storage"
 	goGithub "github.com/google/go-github/github"
 	"golang.org/x/oauth2"
@@ -20,6 +21,10 @@ type Provider struct {
 type Config struct {
 	ClientID     string `json:"client-id"`
 	ClientSecret string `json:"client-secret"`
+}
+
+func (c *Config) New(s storage.Storage) (provider.IdentityProvider, error) {
+	return NewProvider(s), nil
 }
 
 func NewProvider(s storage.Storage) *Provider {

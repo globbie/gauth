@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/globbie/gnode/pkg/auth/ctx"
+	"github.com/globbie/gnode/pkg/auth/provider"
 	"github.com/globbie/gnode/pkg/auth/provider/password/encryptionSchemes"
 	"github.com/globbie/gnode/pkg/auth/storage"
 	"log"
@@ -17,6 +18,10 @@ import (
 const providerID = "password-provider"
 
 type Config struct {
+}
+
+func (c *Config) New(s storage.Storage) (provider.IdentityProvider, error) {
+	return NewProvider(s), nil
 }
 
 type Token struct {

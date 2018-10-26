@@ -57,11 +57,17 @@ func main() {
 	if err != nil {
 		log.Fatalln("could not create storage, error:", err)
 	}
-	for i, p := range cfg.Providers {
-		log.Printf("provider[%v]: %v\n", i, p.Type)
-	}
+
 	Auth := auth.New(VerifyKey, SignKey, storage)
 	Auth.URLPrefix = "/auth/" // todo
+
+	for _, p := range cfg.Providers {
+		provider, err := p.Config.New(storage)
+		if err != nil {
+			log.Fatalf("could not create provider %v, error: %v", p, err)
+		}
+		Auth.AddIdentityProvider(p.Name, provider)
+	}
 
 	router := http.NewServeMux()
 	router.Handle("/auth/", Auth.NewServeMux())

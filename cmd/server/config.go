@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"github.com/globbie/gnode/pkg/auth/provider"
+	"github.com/globbie/gnode/pkg/auth/provider/github"
+	"github.com/globbie/gnode/pkg/auth/provider/password"
 	"github.com/globbie/gnode/pkg/auth/storage"
 	"github.com/globbie/gnode/pkg/auth/storage/knowdy"
 	"github.com/globbie/gnode/pkg/auth/storage/memory"
@@ -34,7 +36,7 @@ type StorageConfig interface {
 	New() (storage.Storage, error)
 }
 
-var implementations = map[string]func() StorageConfig{
+var storageConfigs = map[string]func() StorageConfig{
 	"in-memory": func() StorageConfig { return new(memoryStorage.Config) },
 	"knowdy":    func() StorageConfig { return new(knowdyStorage.Config) },
 }
@@ -45,9 +47,9 @@ func (s *Storage) UnmarshalJSON(b []byte) error {
 		Config json.RawMessage `json:"config"`
 	}
 	if err := json.Unmarshal(b, &data); err != nil {
-		log.Fatalf("parse storage: %v", err)
+		log.Fatalln("parse storage:", err)
 	}
-	f, ok := implementations[data.Type]
+	f, ok := storageConfigs[data.Type]
 	if !ok {
 		log.Fatalf("%v storage type is not implemented", data.Type)
 	}
@@ -67,8 +69,45 @@ func (s *Storage) UnmarshalJSON(b []byte) error {
 }
 
 type Provider struct {
-	Type string `json:"type"`
-	Name string `json:"name"`
+	Type   string         `json:"type"`
+	Name   string         `json:"name"`
+	Config ProviderConfig `json:"config"`
+}
 
-	Config provider.Config `json:"config"`
+type ProviderConfig interface {
+	New(s storage.Storage) (provider.IdentityProvider, error)
+}
+
+var providerConfigs = map[string]func() ProviderConfig{
+	"password": func() ProviderConfig { return new(password.Config) },
+	"github":   func() ProviderConfig { return new(github.Config) },
+}
+
+func (p *Provider) UnmarshalJSON(b []byte) error {
+	var prov struct {
+		Type   string          `json:"type"`
+		Name   string          `json:"name"`
+		Config json.RawMessage `json:"config"`
+	}
+	if err := json.Unmarshal(b, &prov); err != nil {
+		log.Fatalln("parse provider config:", err)
+	}
+	f, ok := providerConfigs[prov.Type]
+	if !ok {
+		log.Fatalf("%v provider type is not implemented", prov.Type)
+	}
+	config := f()
+	if len(prov.Config) != 0 {
+		configData := []byte(string(prov.Config))
+		if err := json.Unmarshal(configData, &config); err != nil {
+			log.Fatalf("fail to parse %v provider config, error: %v", prov.Type, err)
+		}
+
+	}
+	*p = Provider{
+		Type:   prov.Type,
+		Name:   prov.Name,
+		Config: config,
+	}
+	return nil
 }
