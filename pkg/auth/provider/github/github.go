@@ -10,6 +10,7 @@ import (
 	"golang.org/x/oauth2/github"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 type Provider struct {
@@ -35,6 +36,15 @@ func (c *Config) New(s storage.Storage) (provider.IdentityProvider, error) {
 		state: "random-string", // todo: this should be a random string
 	}
 	return &p, nil
+}
+
+type Credentials struct {
+	ID string `json:"id"`
+	Email string `json:"email"`
+}
+
+func (c Credentials) UID() string {
+	return c.ID
 }
 
 func (p *Provider) Login(ctx *ctx.Ctx) {
@@ -74,10 +84,25 @@ func (p *Provider) Callback(ctx *ctx.Ctx) {
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		return
 	}
-	_ = user
-	// todo: find user in storage
-	// todo: create user if not exists
-	// todo: store token for later use
+	// todo: use provider name as a pid
+	creds, err := p.storage.UserRead("github", strconv.FormatInt(*user.ID, 10))
+	if err != nil && err != storage.ErrNotFound {
+		log.Println("failed to get user from stroage, error:", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if err == storage.ErrNotFound {
+		creds = Credentials{
+			ID: strconv.FormatInt(*user.ID, 10),
+			Email: *user.Email,
+		}
+		err = p.storage.UserCreate("github", creds)
+		if err != nil {
+			http.Error(w, "could not create user", http.StatusInternalServerError)
+			return
+		}
+	}
+	// todo: store github token for later use
 	// todo: redirect and issue jwt for user if needed
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
