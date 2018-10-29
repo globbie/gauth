@@ -2,6 +2,7 @@ package auth
 
 import (
 	"github.com/globbie/gnode/pkg/auth/ctx"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -13,20 +14,19 @@ type serveMux struct {
 func (mux *serveMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	paths := strings.Split(strings.TrimPrefix(r.URL.Path, mux.URLPrefix), "/")
 
-	provider := mux.defaultProvider
+	log.Println(paths)
+	log.Println(mux.idProviders)
 
-	if len(paths) == 0 {
+	if len(paths) < 2 { // todo
 		http.NotFound(w, r)
 		return
 	}
-	if len(paths) >= 2 {
-		providerName := paths[1]
-		var err error
-		provider, err = mux.GetIdentityProvider(providerName)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
+	providerName := paths[0]
+	var err error
+	provider, err := mux.GetIdentityProvider(providerName)
+	if err != nil {
+		http.NotFound(w, r)
+		return
 	}
 	context := &ctx.Ctx{
 		W:         w,
@@ -34,7 +34,7 @@ func (mux *serveMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		SignKey:   mux.SignKey,
 		VerifyKey: mux.VerifyKey,
 	}
-	switch paths[0] {
+	switch paths[1] {
 	case "login":
 		provider.Login(context)
 	case "logout":

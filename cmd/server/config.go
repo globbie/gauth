@@ -16,6 +16,7 @@ type Config struct {
 	Token     Token      `json:"token"`
 	Storage   Storage    `json:"storage"`
 	Providers []Provider `json:"providers"`
+	Frontend  Frontend   `json:"frontend"`
 }
 
 type Web struct {
@@ -110,4 +111,8 @@ func (p *Provider) UnmarshalJSON(b []byte) error {
 		Config: config,
 	}
 	return nil
+}
+
+type Frontend struct {
+	Dir string `json:"dir"`
 }

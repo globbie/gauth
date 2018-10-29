@@ -24,21 +24,17 @@ type Config struct {
 }
 
 func (c *Config) New(s storage.Storage) (provider.IdentityProvider, error) {
-	return NewProvider(s), nil
-}
-
-func NewProvider(s storage.Storage) *Provider {
 	p := Provider{
 		storage: s,
 		oauthConfig: oauth2.Config{
-			ClientID:     "",
-			ClientSecret: "",
+			ClientID:     c.ClientID,
+			ClientSecret: c.ClientSecret,
 			Scopes:       []string{},
 			Endpoint:     github.Endpoint,
 		},
 		state: "random-string", // todo: this should be a random string
 	}
-	return &p
+	return &p, nil
 }
 
 func (p *Provider) Login(ctx *ctx.Ctx) {

@@ -15,7 +15,6 @@ type Auth struct {
 	URLPrefix string
 
 	idProviders     map[string]provider.IdentityProvider
-	defaultProvider provider.IdentityProvider
 
 	VerifyKey *rsa.PublicKey
 	SignKey   *rsa.PrivateKey

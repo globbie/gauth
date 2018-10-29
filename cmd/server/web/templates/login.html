@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Globbie Authorization Example Server</title>
+    <style>
+        .login-button {
+        display: block;
+    }
+    </style>
+</head>
+<body>
+    <div class="login-panel">
+        <h2 class="login-heading">Log in to Globbie</h2>
+        <div>
+
+            {{ range $p := .Providers }}
+            <a class="login-button" href="{{ $p.Url }}"><button>Log in with {{ $p.Name }}</button></a>
+            {{ end }}
+
+        </div>
+    </div>
+</body>
+</html>
