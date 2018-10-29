@@ -1,0 +1,34 @@
+{
+  "web": {
+    "http": "127.0.0.1:8081"
+  },
+  "token": {
+    "private-key-path": "example.rsa.pub",
+    "public-key-path": "example.rsa"
+  },
+  "storage": {
+    "type": "in-memory"
+  },
+  "providers": [
+    { "type": "github",
+      "name": "github",
+      "config": {
+        "client-id": "<client-id>",
+        "client-secret": "<client-secret>"
+      }
+    },
+    {
+      "type": "password",
+      "name": "password",
+      "config": {
+        "encryption-scheme": {
+          "name": "bcrypt",
+          "cost": 10
+        }
+      }
+    }
+  ],
+  "frontend": {
+    "dir": "web/templates"
+  }
+}
