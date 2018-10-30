@@ -2,6 +2,8 @@ package github
 
 import (
 	"context"
+	"encoding/json"
+	"github.com/globbie/gnode/pkg/auth"
 	"github.com/globbie/gnode/pkg/auth/ctx"
 	"github.com/globbie/gnode/pkg/auth/provider"
 	"github.com/globbie/gnode/pkg/auth/storage"
@@ -34,6 +36,10 @@ func (c *Config) New(s storage.Storage) (provider.IdentityProvider, error) {
 			Endpoint:     github.Endpoint,
 		},
 		state: "random-string", // todo: this should be a random string
+	}
+	err := s.ProviderCreate("github")
+	if err != nil {
+		return nil, err
 	}
 	return &p, nil
 }
@@ -104,5 +110,20 @@ func (p *Provider) Callback(ctx *ctx.Ctx) {
 	}
 	// todo: store github token for later use
 	// todo: redirect and issue jwt for user if needed
-	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+
+	jwt, err := auth.CreateToken(user.GetEmail(), ctx.SignKey)
+	if err != nil {
+		log.Println("failed to create token", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	response, err := json.Marshal(auth.Token{Token: jwt})
+	if err != nil {
+		log.Print("failed to marshal json:", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(response)
 }

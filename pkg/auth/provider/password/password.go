@@ -1,10 +1,9 @@
 package password
 
 import (
-	"crypto/rsa"
 	"encoding/json"
 	"errors"
-	"github.com/dgrijalva/jwt-go"
+	"github.com/globbie/gnode/pkg/auth"
 	"github.com/globbie/gnode/pkg/auth/ctx"
 	"github.com/globbie/gnode/pkg/auth/provider"
 	"github.com/globbie/gnode/pkg/auth/provider/password/encryptionSchemes"
@@ -12,7 +11,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // todo: use provider name
@@ -23,15 +21,6 @@ type Config struct {
 
 func (c *Config) New(s storage.Storage) (provider.IdentityProvider, error) {
 	return NewProvider(s), nil
-}
-
-type Token struct {
-	Token string `json:"token"`
-}
-
-type Claims struct {
-	*jwt.StandardClaims
-	email string
 }
 
 type Credentials struct {
@@ -49,12 +38,12 @@ type Provider struct {
 }
 
 func NewProvider(s storage.Storage) *Provider {
-	provider := Provider{storage: s}
+	p := Provider{storage: s}
 	err := s.ProviderCreate(providerID)
 	if err != nil {
-		log.Panicln("could not register provider, error:", err)
+		log.Panicln("could not register p, error:", err)
 	}
-	return &provider
+	return &p
 }
 
 // todo: login & password validation
@@ -100,13 +89,13 @@ func (p *Provider) Login(c *ctx.Ctx) {
 		http.Error(c.W, "invalid login or password", http.StatusBadRequest)
 		return
 	}
-	token, err := createToken(login, c.SignKey)
+	token, err := auth.CreateToken(login, c.SignKey)
 	if err != nil {
 		log.Println("failed to create token", err)
 		http.Error(c.W, "internal error", http.StatusInternalServerError)
 		return
 	}
-	response, err := json.Marshal(Token{token})
+	response, err := json.Marshal(auth.Token{Token: token})
 	if err != nil {
 		log.Print("failed to marshal json:", err)
 		http.Error(c.W, "internal server error", http.StatusInternalServerError)
@@ -155,13 +144,13 @@ func (p *Provider) Register(c *ctx.Ctx) {
 		http.Error(c.W, "could not create user", http.StatusBadRequest)
 		return
 	}
-	token, err := createToken(email, c.SignKey)
+	token, err := auth.CreateToken(email, c.SignKey)
 	if err != nil {
 		log.Println("failed to create token", err)
 		http.Error(c.W, "internal error", http.StatusInternalServerError)
 		return
 	}
-	response, err := json.Marshal(Token{token})
+	response, err := json.Marshal(auth.Token{Token: token})
 	if err != nil {
 		log.Print("failed to marshal json:", err)
 		http.Error(c.W, "internal server error", http.StatusInternalServerError)
@@ -173,16 +162,4 @@ func (p *Provider) Register(c *ctx.Ctx) {
 }
 
 func (p *Provider) Callback(ctx *ctx.Ctx) {
-}
-
-func createToken(email string, signKey *rsa.PrivateKey) (string, error) {
-	// todo: make signing method configurable
-	token := jwt.New(jwt.GetSigningMethod("RS256"))
-	token.Claims = &Claims{
-		StandardClaims: &jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Minute * 1).Unix(),
-		},
-		email: email,
-	}
-	return token.SignedString(signKey)
 }
