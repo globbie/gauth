@@ -17,6 +17,7 @@ type Config struct {
 	Storage   Storage    `json:"storage"`
 	Providers []Provider `json:"providers"`
 	Frontend  Frontend   `json:"frontend"`
+	Clients   []Client   `json:"clients"`
 }
 
 type Web struct {
@@ -26,6 +27,16 @@ type Web struct {
 type Token struct {
 	PrivateKeyPath string `json:"private-key-path"`
 	PublicKeyPath  string `json:"public-key-path"`
+}
+
+type Frontend struct {
+	Dir string `json:"dir"`
+}
+
+type Client struct {
+	ID string `json:"client-id"`
+	Secret string `json:"client-secret"`
+	RedirectURIs []string `json:"redirect-uris"`
 }
 
 type Storage struct {
@@ -111,8 +122,4 @@ func (p *Provider) UnmarshalJSON(b []byte) error {
 		Config: config,
 	}
 	return nil
-}
-
-type Frontend struct {
-	Dir string `json:"dir"`
 }

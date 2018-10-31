@@ -9,6 +9,7 @@ import (
 	"github.com/globbie/gnode/pkg/auth/storage"
 	"log"
 	"net/http"
+	"net/url"
 )
 
 type Auth struct {
@@ -50,6 +51,30 @@ func (a *Auth) AddIdentityProvider(name string, provider provider.IdentityProvid
 	a.idProviders[name] = provider
 }
 
+func (a *Auth) AuthorizationHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+		}
+
+		redirectURI, err := url.QueryUnescape(r.Form.Get("redirect_uri"))
+		if err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+		}
+		clientID := r.Form.Get("client_id")
+		state := r.Form.Get("state")
+		responseType := r.Form.Get("response_type")
+		clientSecret := r.Form.Get("client_secret")
+
+		_ = redirectURI
+		_ = clientID
+		_ = state
+		_ = responseType
+		_ = clientSecret
+	})
+}
+
+// todo: change handler name
 func (a *Auth) AuthHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor, func(token *jwt.Token) (interface{}, error) {

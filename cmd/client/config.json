@@ -1,0 +1,8 @@
+{
+  "http": "127.0.0.1:8083",
+  "client-id": "example-client",
+  "client-secret": "12345",
+  "authorization-endpoint": "http://127.0.0.1:8081/auth",
+  "token-endpoint": "http://127.0.0.1:8081/token",
+  "www-dir": "www"
+}

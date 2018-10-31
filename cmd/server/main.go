@@ -28,7 +28,7 @@ func init() {
 
 	configData, err := ioutil.ReadFile(configPath)
 	if err != nil {
-		log.Fatalln("could not open config file,", err)
+		log.Fatalln("could not open config file, error:", err)
 	}
 	err = json.Unmarshal(configData, &cfg)
 	if err != nil {
@@ -74,9 +74,10 @@ func main() {
 	}
 
 	router := http.NewServeMux()
+	router.Handle("/auth", Auth.AuthorizationHandler())
 	router.Handle("/auth/", Auth.NewServeMux())
 	router.Handle("/secret", Auth.AuthHandler(secretHandler()))
-	router.Handle("/static", Frontend)
+	router.Handle("/www", Frontend)
 
 	server := &http.Server{
 		Addr:         cfg.Web.HTTPAddress,
