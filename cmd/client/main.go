@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"golang.org/x/net/context"
+	"golang.org/x/oauth2"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -23,6 +24,10 @@ type Config struct {
 	WWWDir                string `json:"www-dir"`
 }
 
+const (
+	authorizationURL = "/auth"
+)
+
 func main() {
 	var configPath string
 	flag.StringVar(&configPath, "config-path", "config.json", "path to the config file")
@@ -31,10 +36,19 @@ func main() {
 
 	config := configOpen(configPath)
 
-	authorizationURL := config.AuthorizationEndpoint
+	oauthConfig := oauth2.Config{
+		ClientID: config.ClientID,
+		ClientSecret: config.ClientSecret,
+		Endpoint: oauth2.Endpoint{
+			AuthURL: config.AuthorizationEndpoint,
+			TokenURL: config.TokenEndpoint,
+		},
+		RedirectURL: "http://127.0.0.1:8083/callback",
+	}
 
 	router := http.NewServeMux()
-	//router.Handle("/auth", authHandler())
+	router.Handle(authorizationURL, authHandler(oauthConfig))
+	router.Handle("/callback", authCallbackHandler(oauthConfig))
 	//router.Handle("/restricted_area", auth("todo"))
 	router.Handle("/", templateHandlerNew(filepath.Join(config.WWWDir, "templates"), authorizationURL))
 	server := &http.Server{
@@ -129,11 +143,37 @@ func templateHandlerNew(dir string, authorizationURL string) *templateHandler {
 }
 
 func (t *templateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	log.Println(t.authorizationURL)
 	data := struct {
 		URL template.URL
 	}{
-		template.URL(t.authorizationURL),
+		template.URL(t.authorizationURL), // todo: this should be auth url of this service
 	}
 	t.index.Execute(w, data)
+}
+
+func authHandler(config oauth2.Config) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// fixme: state is hardcoded
+		url := config.AuthCodeURL("state", oauth2.AccessTypeOnline)
+		http.Redirect(w, r, url, http.StatusFound)
+	})
+}
+
+func authCallbackHandler(config oauth2.Config) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// fixme: state is hardcoded
+		state := r.FormValue("state")
+		if state != "state" {
+			log.Printf("oauth state does not match '%v', got '%v'", "state", state)
+			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		}
+		code := r.FormValue("code")
+		token, err := config.Exchange(context.TODO(), code)
+		if err != nil {
+			log.Printf("failed to get token, error: '%v'", err)
+			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+			return
+		}
+		log.Println("got token:", token)
+	})
 }
