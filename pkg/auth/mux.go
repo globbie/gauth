@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"github.com/globbie/gnode/pkg/auth/ctx"
+	"github.com/globbie/gauth/pkg/auth/ctx"
 	"log"
 	"net/http"
 	"strings"

@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/globbie/gnode/pkg/auth"
+	"github.com/globbie/gauth/pkg/auth"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -82,6 +82,7 @@ func main() {
 
 	router := http.NewServeMux()
 	router.Handle("/auth", Auth.AuthorizationHandler())
+	router.Handle("/token", Auth.TokenHandler())
 	router.Handle("/auth/", Auth.NewServeMux())
 	router.Handle("/secret", Auth.AuthHandler(secretHandler()))
 	router.Handle("/www", Frontend)

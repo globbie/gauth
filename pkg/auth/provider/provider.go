@@ -1,7 +1,7 @@
 package provider
 
 import (
-	"github.com/globbie/gnode/pkg/auth/ctx"
+	"github.com/globbie/gauth/pkg/auth/ctx"
 )
 
 type IdentityProvider interface {

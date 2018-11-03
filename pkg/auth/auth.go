@@ -5,8 +5,8 @@ import (
 	"errors"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
-	"github.com/globbie/gnode/pkg/auth/provider"
-	"github.com/globbie/gnode/pkg/auth/storage"
+	"github.com/globbie/gauth/pkg/auth/provider"
+	"github.com/globbie/gauth/pkg/auth/storage"
 	"log"
 	"net/http"
 	"net/url"
@@ -65,6 +65,11 @@ func (a *Auth) AddIdentityProvider(name string, provider provider.IdentityProvid
 		log.Fatalf("provider %v is already registered", name)
 	}
 	a.idProviders[name] = provider
+}
+
+func (a *Auth) TokenHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	})
 }
 
 // only authorization code grant flow for now

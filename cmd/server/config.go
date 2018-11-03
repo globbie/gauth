@@ -2,12 +2,12 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/globbie/gnode/pkg/auth/provider"
-	"github.com/globbie/gnode/pkg/auth/provider/github"
-	"github.com/globbie/gnode/pkg/auth/provider/password"
-	"github.com/globbie/gnode/pkg/auth/storage"
-	"github.com/globbie/gnode/pkg/auth/storage/knowdy"
-	"github.com/globbie/gnode/pkg/auth/storage/memory"
+	"github.com/globbie/gauth/pkg/auth/provider"
+	"github.com/globbie/gauth/pkg/auth/provider/github"
+	"github.com/globbie/gauth/pkg/auth/provider/password"
+	"github.com/globbie/gauth/pkg/auth/storage"
+	"github.com/globbie/gauth/pkg/auth/storage/knowdy"
+	"github.com/globbie/gauth/pkg/auth/storage/memory"
 	"log"
 )
 
