@@ -1,7 +1,7 @@
 package memoryStorage
 
 import (
-	"github.com/globbie/gnode/pkg/auth/storage"
+	"github.com/globbie/gauth/pkg/auth/storage"
 	"testing"
 )
 

@@ -1,0 +1,104 @@
+* {
+    box-sizing: border-box;
+}
+
+.or-separator {
+    display: block;
+    text-align: center;
+    overflow: hidden;
+    white-space: nowrap;
+    color: gray;
+}
+
+.or-separator > span {
+    position: relative;
+    display: inline-block;
+}
+
+.or-separator > span:before,
+.or-separator > span:after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 99999px;
+    height: 1px;
+    background: #ccc;
+}
+
+.or-separator > span:before {
+    right: 100%;
+    margin-right: 15px;
+}
+
+.or-separator > span:after {
+    left: 100%;
+    margin-left: 15px;
+}
+
+.login-form {
+    width: 340px;
+    margin: 30px auto;
+    border-radius: 5px;
+    background-color: #f2f2f2;
+    padding: 20px 15px 20px 15px;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.login-form h2 {
+    margin: 0 0 15px;
+}
+
+.h2, h2 {
+    font-size: 30px;
+}
+
+input,
+.btn {
+    margin: 5px 0;
+    text-align: left;
+    width: 100%;
+    border: none;
+    border-radius: 4px;
+    opacity: 0.85;
+    display: inline-block;
+    font-size: 17px;
+    line-height: 20px;
+    text-decoration: none;
+    color: white;
+    background-color: #45a049;
+}
+
+input:hover,
+.btn:hover {
+    opacity: 1;
+    color: white;
+}
+
+.facebook {
+    background-color: #3B5998;
+}
+
+.twitter {
+    background-color: #55ACEE;
+}
+
+.google {
+    background-color: #DD4B39;
+}
+
+.github {
+    background-color: #50555a;
+}
+
+input[type=submit] {
+    background-color: #4CAF50;
+    color: white;
+    cursor: pointer;
+}
+
+input[type=submit] {
+    background-color: #45a049;
+}

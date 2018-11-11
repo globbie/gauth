@@ -61,7 +61,10 @@ func main() {
 	Auth := auth.New(VerifyKey, SignKey, storage)
 	Auth.URLPrefix = "/auth/" // todo
 
-	Frontend := NewFrontedHandler(cfg.Frontend.Dir)
+	view := NewFrontedHandler(ViewConfig{
+		staticPath: "./web/static/",
+		templatesPath: "./web/templates/",
+	})
 
 	for _, p := range cfg.Providers {
 		provider, err := p.Config.New(storage)
@@ -69,7 +72,7 @@ func main() {
 			log.Fatalf("could not create provider %v, error: %v", p, err)
 		}
 		Auth.AddIdentityProvider(p.Name, provider)
-		Frontend.RegisterProvider(ProviderInfo{p.Name, Auth.URLPrefix + "/" + p.Name + "/login" })
+		view.RegisterProvider(ProviderInfo{p.Name, Auth.URLPrefix + "/" + p.Name + "/login" })
 	}
 	for _, c := range cfg.Clients {
 		client := auth.Client{
@@ -85,7 +88,8 @@ func main() {
 	router.Handle("/token", Auth.TokenHandler())
 	router.Handle("/auth/", Auth.NewServeMux())
 	router.Handle("/secret", Auth.AuthHandler(secretHandler()))
-	router.Handle("/www", Frontend)
+
+	router.Handle("/", view)
 
 	server := &http.Server{
 		Addr:         cfg.Web.HTTPAddress,
