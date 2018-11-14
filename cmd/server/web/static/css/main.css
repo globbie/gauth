@@ -74,6 +74,9 @@ input,
 input:hover,
 .btn:hover {
     opacity: 1;
+}
+
+.btn:hover {
     color: white;
 }
 

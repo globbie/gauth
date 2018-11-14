@@ -62,6 +62,7 @@ func main() {
 	Auth.URLPrefix = "/auth/" // todo
 
 	view := NewFrontedHandler(ViewConfig{
+		address: cfg.Web.HTTPAddress,
 		staticPath: "./web/static/",
 		templatesPath: "./web/templates/",
 	})

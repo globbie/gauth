@@ -38,9 +38,11 @@
         </span>
     </div>
 
-    <input class="form-control" type="email" name="email" placeholder="Email" required="required">
-    <input class="form-control" type="password" name="password" placeholder="Password" required="required">
-    <input class="form-control text-center" type="submit" value="Login">
+    <form method="post" action="/auth/password/login">
+        <input class="form-control" type="email" name="login" placeholder="Email" required="required">
+        <input class="form-control" type="password" name="password" placeholder="Password" required="required">
+        <input class="form-control text-center" type="submit" value="Login">
+    </form>
 
     <div class="text-center">
         <a href="#">Forgot password?</a>
