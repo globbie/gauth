@@ -19,6 +19,7 @@ type Config struct {
 	Address               string `json:"http"`
 	ClientID              string `json:"client-id"`
 	ClientSecret          string `json:"client-secret"`
+	RedirectURI           string `json:"redirect-uri"`
 	AuthorizationEndpoint string `json:"authorization-endpoint"`
 	TokenEndpoint         string `json:"token-endpoint"`
 	WWWDir                string `json:"www-dir"`
@@ -33,17 +34,16 @@ func main() {
 	flag.StringVar(&configPath, "config-path", "config.json", "path to the config file")
 	flag.Parse()
 
-
 	config := configOpen(configPath)
 
 	oauthConfig := oauth2.Config{
-		ClientID: config.ClientID,
+		ClientID:     config.ClientID,
 		ClientSecret: config.ClientSecret,
 		Endpoint: oauth2.Endpoint{
-			AuthURL: config.AuthorizationEndpoint,
+			AuthURL:  config.AuthorizationEndpoint,
 			TokenURL: config.TokenEndpoint,
 		},
-		RedirectURL: "http://127.0.0.1:8083/callback",
+		RedirectURL: config.RedirectURI,
 	}
 
 	router := http.NewServeMux()

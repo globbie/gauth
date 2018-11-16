@@ -1,8 +1,9 @@
 {
-  "http": "127.0.0.1:8083",
+  "http": "localhost:8083",
   "client-id": "example-client",
   "client-secret": "12345",
-  "authorization-endpoint": "http://127.0.0.1:8081/auth",
-  "token-endpoint": "http://127.0.0.1:8081/token",
-  "www-dir": "www"
+  "redirect-uri": "http://localhost:8083/callback",
+  "authorization-endpoint": "http://localhost:8081/auth",
+  "token-endpoint": "http://localhost:8081/token",
+  "www-dir": "web"
 }

@@ -34,11 +34,12 @@ type Frontend struct {
 }
 
 type Client struct {
-	ID string `json:"client-id"`
-	Secret string `json:"client-secret"`
+	ID           string   `json:"client-id"`
+	Secret       string   `json:"client-secret"`
 	RedirectURIs []string `json:"redirect-uris"`
 }
 
+// todo: one should separate storages for different purposes
 type Storage struct {
 	Type   string        `json:"type"`
 	Config StorageConfig `json:"config"`

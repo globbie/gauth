@@ -45,7 +45,7 @@ func (c *Config) New(s storage.Storage) (provider.IdentityProvider, error) {
 }
 
 type Credentials struct {
-	ID string `json:"id"`
+	ID    string `json:"id"`
 	Email string `json:"email"`
 }
 
@@ -99,7 +99,7 @@ func (p *Provider) Callback(ctx *ctx.Ctx) {
 	}
 	if err == storage.ErrNotFound {
 		creds = Credentials{
-			ID: strconv.FormatInt(*user.ID, 10),
+			ID:    strconv.FormatInt(*user.ID, 10),
 			Email: *user.Email,
 		}
 		err = p.storage.UserCreate("github", creds)

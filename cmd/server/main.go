@@ -62,8 +62,8 @@ func main() {
 	Auth.URLPrefix = "/auth/" // todo
 
 	view := NewFrontedHandler(ViewConfig{
-		address: cfg.Web.HTTPAddress,
-		staticPath: "./web/static/",
+		address:       cfg.Web.HTTPAddress,
+		staticPath:    "./web/static/",
 		templatesPath: "./web/templates/",
 	})
 
@@ -73,12 +73,12 @@ func main() {
 			log.Fatalf("could not create provider %v, error: %v", p, err)
 		}
 		Auth.AddIdentityProvider(p.Name, provider)
-		view.RegisterProvider(ProviderInfo{p.Name, Auth.URLPrefix + "/" + p.Name + "/login" })
+		view.RegisterProvider(ProviderInfo{p.Name, Auth.URLPrefix + "/" + p.Name + "/login"})
 	}
 	for _, c := range cfg.Clients {
 		client := auth.Client{
-			ID: c.ID,
-			Secret: c.Secret,
+			ID:           c.ID,
+			Secret:       c.Secret,
 			RedirectURIs: c.RedirectURIs,
 		}
 		Auth.AddClient(client)
