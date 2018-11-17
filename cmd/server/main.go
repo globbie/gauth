@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 )
 
@@ -73,7 +74,11 @@ func main() {
 			log.Fatalf("could not create provider %v, error: %v", p, err)
 		}
 		Auth.AddIdentityProvider(p.Name, provider)
-		view.RegisterProvider(ProviderInfo{p.Name, Auth.URLPrefix + "/" + p.Name + "/login"})
+		view.RegisterProvider(ProviderInfo{
+			Name: p.Name,
+			Url: Auth.URLPrefix + "/" + p.Name + "/login",
+			Type: strings.ToLower(p.Type),
+		})
 	}
 	for _, c := range cfg.Clients {
 		client := auth.Client{

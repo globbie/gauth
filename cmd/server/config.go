@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"github.com/globbie/gauth/pkg/auth/provider"
+	"github.com/globbie/gauth/pkg/auth/provider/facebook"
 	"github.com/globbie/gauth/pkg/auth/provider/github"
 	"github.com/globbie/gauth/pkg/auth/provider/password"
 	"github.com/globbie/gauth/pkg/auth/storage"
@@ -94,6 +95,7 @@ type ProviderConfig interface {
 var providerConfigs = map[string]func() ProviderConfig{
 	"password": func() ProviderConfig { return new(password.Config) },
 	"github":   func() ProviderConfig { return new(github.Config) },
+	"facebook": func() ProviderConfig { return new(facebook.Config )},
 }
 
 func (p *Provider) UnmarshalJSON(b []byte) error {

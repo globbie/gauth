@@ -81,7 +81,7 @@ func (a *Auth) TokenHandler() http.Handler {
 
 // todo: validate all request fields
 func (a *Auth) parseAuthRequest(r *http.Request) (authReq storage.AuthRequest, err error) {
-	if err := r.ParseForm(); err != nil {
+	if err = r.ParseForm(); err != nil {
 		err = errors.New("bad request") // todo
 		return
 	}
@@ -139,6 +139,7 @@ func (a *Auth) AuthorizationHandler() http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		_ = authReq
 
 		// todo: render login/register page with AuthRequestID set as a parameter of login/register button
 		// /auth/<provider>/<action>?req-id=<id>

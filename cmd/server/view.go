@@ -18,6 +18,7 @@ const (
 type ProviderInfo struct {
 	Name string
 	Url  string
+	Type string
 }
 
 type view struct {
