@@ -24,7 +24,13 @@
     <a href="{{ .Url }}" class="{{ .Type }} btn">
         <i class="fa fa-{{ .Type }} fa-fw"></i> Login with {{ .Name }}
     </a>
-    {{ else }}
+    {{ end }}
+    {{ end }}
+
+    <!-- todo:  one should not show the separator if there was no oauth2 provider -->
+
+    {{ range $p := .Providers }}
+    {{ if eq .Name "password" }}
     <div class="or-separator">
         <span style="padding: 0 10px">
             <i>or log in manually</i>
@@ -40,21 +46,6 @@
     </div>
     {{ end }}
     {{ end }}
-
-    <!--
-    <a href="#" class="facebook btn">
-        <i class="fa fa-facebook fa-fw"></i> Login with Facebook
-    </a>
-    <a href="#" class="twitter btn">
-        <i class="fa fa-twitter fa-fw"></i> Login with Twitter
-    </a>
-    <a href="#" class="google btn">
-        <i class="fa fa-google fa-fw"></i> Login with Google
-    </a>
-    <a href="#" class="github btn">
-        <i class="fa fa-github fa-fw"></i> Login with Github
-    </a>
-    -->
 
 </div>
 </body>

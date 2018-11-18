@@ -14,30 +14,32 @@
 <div class="login-form">
     <h2 class="text-center">Register</h2>
 
+    {{ range $p := .Providers }}
+    {{ if eq .Name "password" }}
     <form method="post" action="/auth/password/register">
         <input class="form-control" type="email" name="login" placeholder="Email" required="required">
         <input class="form-control" type="password" name="password" placeholder="Password" required="required">
         <input class="form-control" type="password" name="password-repeat" placeholder="Repeat Password" required="required">
         <input class="form-control text-center" type="submit" value="Register">
     </form>
+    {{ end }}
+    {{ end }}
 
+    <!-- todo:  one should not show the separator if there was no password provider -->
+    
     <div class="or-separator">
         <span style="padding: 0 10px">
             <i>or register with</i>
         </span>
     </div>
-    <a href="#" class="facebook btn">
-    <i class="fa fa-facebook fa-fw"></i> Register with Facebook
+
+    {{ range $p := .Providers }}
+    {{ if ne .Name "password" }}
+    <a href="{{ .Url }}" class="{{ .Type }} btn">
+        <i class="fa fa-{{ .Type }} fa-fw"></i> Register with {{ .Name }}
     </a>
-    <a href="#" class="twitter btn">
-        <i class="fa fa-twitter fa-fw"></i> Register with Twitter
-    </a>
-    <a href="#" class="google btn">
-        <i class="fa fa-google fa-fw"></i> Register with Google
-    </a>
-    <a href="#" class="github btn">
-        <i class="fa fa-github fa-fw"></i> Register with Github
-    </a>
+    {{ end }}
+    {{ end }}
 
     <div class="text-center">
         By registering, you agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>
