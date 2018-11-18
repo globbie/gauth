@@ -26,6 +26,8 @@ type Auth struct {
 
 	VerifyKey *rsa.PublicKey
 	SignKey   *rsa.PrivateKey
+
+	Storage storage.Storage
 }
 
 // todo: delete this factory
@@ -35,6 +37,7 @@ func New(verifyKey *rsa.PublicKey, signKey *rsa.PrivateKey, storage storage.Stor
 		clients:     make(map[string]Client),
 		VerifyKey:   verifyKey,
 		SignKey:     signKey,
+		Storage:     storage,
 	}
 	return auth
 }
@@ -123,7 +126,7 @@ func (a *Auth) parseAuthRequest(r *http.Request) (authReq storage.AuthRequest, e
 
 	// todo: setup all parse fields
 	return storage.AuthRequest{
-		ID:           "todo: generate id",
+		ID:           "todo: generate id", // todo: generate id
 		ClientID:     clientID,
 		RedirectURI:  redirectURI,
 		State:        state,
@@ -139,7 +142,11 @@ func (a *Auth) AuthorizationHandler() http.Handler {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		_ = authReq
+		err = a.Storage.AuthRequestCreate(authReq)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
 
 		// todo: render login/register page with AuthRequestID set as a parameter of login/register button
 		// /auth/<provider>/<action>?req-id=<id>
@@ -160,18 +167,18 @@ func (a *Auth) AuthorizationHandler() http.Handler {
 		// earlier.
 
 		/*
-		u, err := url.Parse(redirectURI)
-		if err != nil {
-			log.Printf("failed to parse redirect uri '%v', error: %v", redirectURI, err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		q := u.Query()
-		q.Set("code", "123") // todo
-		q.Set("state", state)
-		u.RawQuery = q.Encode()
+			u, err := url.Parse(redirectURI)
+			if err != nil {
+				log.Printf("failed to parse redirect uri '%v', error: %v", redirectURI, err)
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
+			q := u.Query()
+			q.Set("code", "123") // todo
+			q.Set("state", state)
+			u.RawQuery = q.Encode()
 
-		http.Redirect(w, r, u.String(), http.StatusSeeOther)
+			http.Redirect(w, r, u.String(), http.StatusSeeOther)
 		*/
 	})
 }

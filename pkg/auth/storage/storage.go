@@ -10,6 +10,8 @@ var (
 	ErrNotImplemented = errors.New("not implemented")
 )
 
+// todo: make separate interfaces for users, auth-requests and providers
+
 type Storage interface {
 	Close() error
 
@@ -22,18 +24,14 @@ type Storage interface {
 	UserRead(pid string, uid string) (Credentials, error)
 	UserUpdate(pid string, uid string, updater func(c Credentials) (Credentials, error)) error
 	UserDelete(pid string, uid string) error
-}
-
-type Credentials interface {
-	UID() string
-}
-
-type AuthRequestStorage interface {
-	Close() error
 
 	AuthRequestCreate(a AuthRequest) error
 	AuthRequestRead(uid string) (AuthRequest, error)
 	AuthRequestDelete(uid string) error
+}
+
+type Credentials interface {
+	UID() string
 }
 
 type AuthRequest struct {

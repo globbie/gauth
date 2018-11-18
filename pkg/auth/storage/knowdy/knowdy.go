@@ -42,6 +42,18 @@ func (s *KnowdyStorage) UserDelete(pid string, uid string) error {
 	return errors.New("not implemented")
 }
 
+func (s *KnowdyStorage) AuthRequestCreate(a storage.AuthRequest) error {
+	return errors.New("not implemented")
+}
+
+func (s *KnowdyStorage) AuthRequestRead(uid string) (storage.AuthRequest, error) {
+	return storage.AuthRequest{}, errors.New("not implemented")
+}
+
+func (s *KnowdyStorage) AuthRequestDelete(uid string) error {
+	return errors.New("not implemented")
+}
+
 type Config struct {
 	ConfigPath string `json:"config-path"`
 }
