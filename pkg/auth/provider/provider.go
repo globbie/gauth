@@ -1,12 +1,15 @@
 package provider
 
 import (
-	"github.com/globbie/gauth/pkg/auth/ctx"
+	"github.com/globbie/gauth/pkg/auth/storage"
+	"net/http"
 )
 
 type IdentityProvider interface {
-	Login(ctx *ctx.Ctx)
-	Logout(ctx *ctx.Ctx)
-	Register(ctx *ctx.Ctx)
-	Callback(ctx *ctx.Ctx)
+	Type() string
+
+	Login(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
+	Register(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
+	Logout(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
+	Callback(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
 }

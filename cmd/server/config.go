@@ -88,13 +88,13 @@ type Provider struct {
 }
 
 type ProviderConfig interface {
-	New(s storage.Storage) (provider.IdentityProvider, error)
+	New(s storage.Storage, id string) (provider.IdentityProvider, error)
 }
 
 var providerConfigs = map[string]func() ProviderConfig{
-	"password": func() ProviderConfig { return new(password.Config) },
-	"github":   func() ProviderConfig { return new(github.Config) },
-	"facebook": func() ProviderConfig { return new(facebook.Config )},
+	password.ProviderType: func() ProviderConfig { return new(password.Config) },
+	github.ProviderType:   func() ProviderConfig { return new(github.Config) },
+	facebook.ProviderType: func() ProviderConfig { return new(facebook.Config) },
 }
 
 func (p *Provider) UnmarshalJSON(b []byte) error {

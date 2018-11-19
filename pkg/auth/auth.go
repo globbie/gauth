@@ -28,16 +28,18 @@ type Auth struct {
 	SignKey   *rsa.PrivateKey
 
 	Storage storage.Storage
+	View    View
 }
 
 // todo: delete this factory
-func New(verifyKey *rsa.PublicKey, signKey *rsa.PrivateKey, storage storage.Storage) *Auth {
+func New(verifyKey *rsa.PublicKey, signKey *rsa.PrivateKey, storage storage.Storage, view View) *Auth {
 	auth := &Auth{
 		idProviders: make(map[string]provider.IdentityProvider),
 		clients:     make(map[string]Client),
 		VerifyKey:   verifyKey,
 		SignKey:     signKey,
 		Storage:     storage,
+		View:        view,
 	}
 	return auth
 }
@@ -147,25 +149,18 @@ func (a *Auth) AuthorizationHandler() http.Handler {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
-
-		// todo: render login/register page with AuthRequestID set as a parameter of login/register button
-		// /auth/<provider>/<action>?req-id=<id>
-		// so view must be injected into auth
-
-		// from https://tools.ietf.org/html/rfc6749#section-4.1
-		// The authorization server authenticates the resource owner (via
-		// the user-agent) and establishes whether the resource owner
-		// grants or denies the client's access request.
-
-		// todo: move code below into new separate function
-		// from https://tools.ietf.org/html/rfc6749#section-4.1
-		// Assuming the resource owner grants access, the authorization
-		// server redirects the user-agent back to the client using the
-		// redirection URI provided earlier (in the request or during
-		// client registration).  The redirection URI includes an
-		// authorization code and any local state provided by the client
-		// earlier.
-
+		providersInfo := make([]ProviderInfo, 0, len(a.idProviders))
+		for name, p:= range a.idProviders {
+			providersInfo = append(providersInfo, ProviderInfo{
+				Name: name,
+				Url: "/auth/" + name + "/login" + "?req=" + authReq.ID,
+				Type: p.Type(),
+			})
+		}
+		err = a.View.Login(w, providersInfo)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+		}
 		/*
 			u, err := url.Parse(redirectURI)
 			if err != nil {

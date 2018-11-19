@@ -2,9 +2,6 @@ package github
 
 import (
 	"context"
-	"encoding/json"
-	"github.com/globbie/gauth/pkg/auth"
-	"github.com/globbie/gauth/pkg/auth/ctx"
 	"github.com/globbie/gauth/pkg/auth/provider"
 	"github.com/globbie/gauth/pkg/auth/storage"
 	goGithub "github.com/google/go-github/github"
@@ -15,18 +12,14 @@ import (
 	"strconv"
 )
 
-type Provider struct {
-	storage     storage.Storage
-	oauthConfig oauth2.Config
-	state       string
-}
+const ProviderType = "github"
 
 type Config struct {
 	ClientID     string `json:"client-id"`
 	ClientSecret string `json:"client-secret"`
 }
 
-func (c *Config) New(s storage.Storage) (provider.IdentityProvider, error) {
+func (c *Config) New(s storage.Storage, id string) (provider.IdentityProvider, error) {
 	p := Provider{
 		storage: s,
 		oauthConfig: oauth2.Config{
@@ -37,38 +30,35 @@ func (c *Config) New(s storage.Storage) (provider.IdentityProvider, error) {
 		},
 		state: "random-string", // todo: this should be a random string
 	}
-	err := s.ProviderCreate("github")
+	err := s.ProviderCreate(id)
 	if err != nil {
 		return nil, err
 	}
 	return &p, nil
 }
 
-type Credentials struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
+type Provider struct {
+	storage     storage.Storage
+	oauthConfig oauth2.Config
+	state       string
 }
 
-func (c Credentials) UID() string {
-	return c.ID
+func (p *Provider) Type() string {
+	return ProviderType
 }
 
-func (p *Provider) Login(ctx *ctx.Ctx) {
+func (p *Provider) Login(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) {
 	url := p.oauthConfig.AuthCodeURL(p.state, oauth2.AccessTypeOnline) // todo: use AccessTypeOffLine
-	http.Redirect(ctx.W, ctx.R, url, http.StatusFound)
+	http.Redirect(w, r, url, http.StatusFound)
 }
 
-func (p *Provider) Logout(ctx *ctx.Ctx) {
+func (p *Provider) Logout(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) {
 }
 
-func (p *Provider) Register(ctx *ctx.Ctx) {
+func (p *Provider) Register(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) {
 }
 
-func (p *Provider) Callback(ctx *ctx.Ctx) {
-	var (
-		w = ctx.W
-		r = ctx.R
-	)
+func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) {
 	state := r.FormValue("state")
 	if state != p.state {
 		log.Printf("oauth state does not match, expected '%s', got '%s'\n", p.state, state)
@@ -111,19 +101,29 @@ func (p *Provider) Callback(ctx *ctx.Ctx) {
 	// todo: store github token for later use
 	// todo: redirect and issue jwt for user if needed
 
-	jwt, err := auth.CreateToken(user.GetEmail(), ctx.SignKey)
-	if err != nil {
-		log.Println("failed to create token", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	response, err := json.Marshal(auth.Token{Token: jwt})
-	if err != nil {
-		log.Print("failed to marshal json:", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
+	//jwt, err := auth.CreateToken(user.GetEmail(), ctx.SignKey)
+	//if err != nil {
+	//	log.Println("failed to create token", err)
+	//	http.Error(w, "internal error", http.StatusInternalServerError)
+	//	return
+	//}
+	//response, err := json.Marshal(auth.Token{Token: jwt})
+	//if err != nil {
+	//	log.Print("failed to marshal json:", err)
+	//	http.Error(w, "internal server error", http.StatusInternalServerError)
+	//	return
+	//}
+	response := []byte("to be done")
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(response)
+}
+
+type Credentials struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+}
+
+func (c Credentials) UID() string {
+	return c.ID
 }

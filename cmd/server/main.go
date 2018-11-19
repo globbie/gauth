@@ -59,22 +59,22 @@ func main() {
 		log.Fatalln("could not create storage, error:", err)
 	}
 
-	Auth := auth.New(VerifyKey, SignKey, storage)
-	Auth.URLPrefix = "/auth/" // todo
-
 	view := NewFrontedHandler(ViewConfig{
 		address:       cfg.Web.HTTPAddress,
 		staticPath:    "./web/static/",
 		templatesPath: "./web/templates/",
 	})
 
+	Auth := auth.New(VerifyKey, SignKey, storage, view)
+	Auth.URLPrefix = "/auth/" // todo
+
 	for _, p := range cfg.Providers {
-		provider, err := p.Config.New(storage)
+		provider, err := p.Config.New(storage, p.Name)
 		if err != nil {
 			log.Fatalf("could not create provider %v, error: %v", p, err)
 		}
 		Auth.AddIdentityProvider(p.Name, provider)
-		view.RegisterProvider(ProviderInfo{
+		view.RegisterProvider(auth.ProviderInfo{
 			Name: p.Name,
 			Url: Auth.URLPrefix + "/" + p.Name + "/login",
 			Type: strings.ToLower(p.Type),
