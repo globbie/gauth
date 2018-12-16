@@ -3,7 +3,7 @@
   "client-id": "example-client",
   "client-secret": "12345",
   "redirect-uri": "http://localhost:8083/callback",
-  "authorization-endpoint": "http://localhost:8081/auth",
-  "token-endpoint": "http://localhost:8081/token",
+  "authorization-endpoint": "https://auth.readyforsky.com/auth",
+  "token-endpoint": "http://auth.readyforsky.com/token",
   "www-dir": "web"
 }
