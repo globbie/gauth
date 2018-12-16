@@ -10,7 +10,8 @@
     "type": "in-memory"
   },
   "providers": [
-    { "type": "github",
+    {
+      "type": "github",
       "name": "github",
       "config": {
         "client-id": "<client-id>",

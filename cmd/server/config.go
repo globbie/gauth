@@ -5,6 +5,7 @@ import (
 	"github.com/globbie/gauth/pkg/auth/provider"
 	"github.com/globbie/gauth/pkg/auth/provider/facebook"
 	"github.com/globbie/gauth/pkg/auth/provider/github"
+	"github.com/globbie/gauth/pkg/auth/provider/google"
 	"github.com/globbie/gauth/pkg/auth/provider/password"
 	"github.com/globbie/gauth/pkg/auth/storage"
 	"github.com/globbie/gauth/pkg/auth/storage/knowdy"
@@ -96,6 +97,7 @@ var providerConfigs = map[string]func() ProviderConfig{
 	password.ProviderType: func() ProviderConfig { return new(password.Config) },
 	github.ProviderType:   func() ProviderConfig { return new(github.Config) },
 	facebook.ProviderType: func() ProviderConfig { return new(facebook.Config) },
+	google.ProviderType:   func() ProviderConfig { return new(google.Config) },
 }
 
 func (p *Provider) UnmarshalJSON(b []byte) error {
