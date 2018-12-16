@@ -21,12 +21,14 @@ func (c *Config) New() (storage.Storage, error) {
 type MemoryStorage struct {
 	credentials  map[string]map[string]storage.Credentials
 	authRequests map[string]storage.AuthRequest
+	authCodes    map[string]storage.AuthCode
 }
 
 func New() MemoryStorage {
 	s := MemoryStorage{}
 	s.credentials = make(map[string]map[string]storage.Credentials)
 	s.authRequests = make(map[string]storage.AuthRequest)
+	s.authCodes = make(map[string]storage.AuthCode)
 	return s
 }
 
@@ -101,6 +103,32 @@ func (s *MemoryStorage) AuthRequestRead(uid string) (a storage.AuthRequest, err 
 
 func (s *MemoryStorage) AuthRequestDelete(uid string) error {
 	_, ok := s.authRequests[uid]
+	if !ok {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
+func (s *MemoryStorage) AuthCodeCreate(a storage.AuthCode) error {
+	_, ok := s.authCodes[a.ID]
+	if ok {
+		return storage.ErrAlreadyExists
+	}
+	s.authCodes[a.ID] = a
+	return nil
+}
+
+func (s *MemoryStorage) AuthCodeRead(uid string) (a storage.AuthCode, err error) {
+	a, ok := s.authCodes[uid]
+	if !ok {
+		err = storage.ErrNotFound
+		return
+	}
+	return
+}
+
+func (s *MemoryStorage) AuthCodeDelete(uid string) error {
+	_, ok := s.authCodes[uid]
 	if !ok {
 		return storage.ErrNotFound
 	}

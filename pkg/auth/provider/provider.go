@@ -11,5 +11,5 @@ type IdentityProvider interface {
 	Login(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
 	Register(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
 	Logout(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
-	Callback(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
+	Callback(w http.ResponseWriter, r *http.Request, request storage.AuthRequest) error
 }

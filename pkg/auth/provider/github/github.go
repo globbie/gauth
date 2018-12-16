@@ -2,12 +2,13 @@ package github
 
 import (
 	"context"
+	"fmt"
+	"github.com/globbie/gauth/pkg/auth"
 	"github.com/globbie/gauth/pkg/auth/provider"
 	"github.com/globbie/gauth/pkg/auth/storage"
 	goGithub "github.com/google/go-github/github"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
-	"log"
 	"net/http"
 	"strconv"
 )
@@ -21,6 +22,7 @@ type Config struct {
 
 func (c *Config) New(s storage.Storage, id string) (provider.IdentityProvider, error) {
 	p := Provider{
+		id:      id,
 		storage: s,
 		oauthConfig: oauth2.Config{
 			ClientID:     c.ClientID,
@@ -28,7 +30,6 @@ func (c *Config) New(s storage.Storage, id string) (provider.IdentityProvider, e
 			Scopes:       []string{},
 			Endpoint:     github.Endpoint,
 		},
-		state: "random-string", // todo: this should be a random string
 	}
 	err := s.ProviderCreate(id)
 	if err != nil {
@@ -38,17 +39,18 @@ func (c *Config) New(s storage.Storage, id string) (provider.IdentityProvider, e
 }
 
 type Provider struct {
+	id          string
 	storage     storage.Storage
 	oauthConfig oauth2.Config
-	state       string
 }
 
 func (p *Provider) Type() string {
 	return ProviderType
 }
 
+// todo: use AccessTypeOffLine
 func (p *Provider) Login(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) {
-	url := p.oauthConfig.AuthCodeURL(p.state, oauth2.AccessTypeOnline) // todo: use AccessTypeOffLine
+	url := p.oauthConfig.AuthCodeURL(authReq.ID, oauth2.AccessTypeOnline)
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
@@ -58,34 +60,33 @@ func (p *Provider) Logout(w http.ResponseWriter, r *http.Request, authReq storag
 func (p *Provider) Register(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) {
 }
 
-func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) {
-	state := r.FormValue("state")
-	if state != p.state {
-		log.Printf("oauth state does not match, expected '%s', got '%s'\n", p.state, state)
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		return
-	}
+func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) error {
 	code := r.FormValue("code")
 	token, err := p.oauthConfig.Exchange(context.TODO(), code)
 	if err != nil {
-		log.Printf("failed to get token, error: '%v'", err)
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		return
+		return auth.Error{
+			StatusCode: http.StatusBadRequest,
+			Message: fmt.Sprint("oauth exchange failed:", err.Error()),
+			PublicMessage: "Bad Request",
+		}
 	}
 	client := p.oauthConfig.Client(context.TODO(), token)
 	githubClient := goGithub.NewClient(client)
 	user, _, err := githubClient.Users.Get(context.TODO(), "")
 	if err != nil {
-		log.Println("failed to get github user info, error:", err)
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		return
+		return auth.Error{
+			StatusCode: http.StatusBadRequest,
+			Message: fmt.Sprint("oauth exchange failed:", err.Error()),
+			PublicMessage: "Bad Request",
+		}
 	}
-	// todo: use provider name as a pid
-	creds, err := p.storage.UserRead("github", strconv.FormatInt(*user.ID, 10))
+	creds, err := p.storage.UserRead(p.id, strconv.FormatInt(*user.ID, 10))
 	if err != nil && err != storage.ErrNotFound {
-		log.Println("failed to get user from stroage, error:", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+		return auth.Error{
+			StatusCode: http.StatusInternalServerError,
+			Message: fmt.Sprint("failed to get user from storage:", err.Error()),
+			PublicMessage: "Internal Error",
+		}
 	}
 	if err == storage.ErrNotFound {
 		creds = Credentials{
@@ -94,30 +95,32 @@ func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq stor
 		}
 		err = p.storage.UserCreate("github", creds)
 		if err != nil {
-			http.Error(w, "could not create user", http.StatusInternalServerError)
-			return
+			return auth.Error{
+				StatusCode: http.StatusInternalServerError,
+				Message: fmt.Sprint("could not create user:", err.Error()),
+				PublicMessage: "Internal Error",
+			}
 		}
 	}
-	// todo: store github token for later use
-	// todo: redirect and issue jwt for user if needed
-
-	//jwt, err := auth.CreateToken(user.GetEmail(), ctx.SignKey)
-	//if err != nil {
-	//	log.Println("failed to create token", err)
-	//	http.Error(w, "internal error", http.StatusInternalServerError)
-	//	return
-	//}
-	//response, err := json.Marshal(auth.Token{Token: jwt})
-	//if err != nil {
-	//	log.Print("failed to marshal json:", err)
-	//	http.Error(w, "internal server error", http.StatusInternalServerError)
-	//	return
-	//}
-	response := []byte("to be done")
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(response)
+	return nil
 }
+
+//jwt, err := auth.CreateToken(user.GetEmail(), ctx.SignKey)
+//if err != nil {
+//	log.Println("failed to create token", err)
+//	http.Error(w, "internal error", http.StatusInternalServerError)
+//	return
+//}
+//response, err := json.Marshal(auth.Token{Token: jwt})
+//if err != nil {
+//	log.Print("failed to marshal json:", err)
+//	http.Error(w, "internal server error", http.StatusInternalServerError)
+//	return
+//}
+//response := []byte("to be done")
+//w.WriteHeader(http.StatusOK)
+//w.Header().Set("Content-Type", "application/json")
+//w.Write(response)
 
 type Credentials struct {
 	ID    string `json:"id"`

@@ -2,14 +2,17 @@ package auth
 
 import (
 	"crypto/rsa"
+	"encoding/json"
 	"errors"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
 	"github.com/globbie/gauth/pkg/auth/provider"
 	"github.com/globbie/gauth/pkg/auth/storage"
+	"github.com/google/uuid"
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 )
 
 type Client struct {
@@ -44,10 +47,6 @@ func New(verifyKey *rsa.PublicKey, signKey *rsa.PrivateKey, storage storage.Stor
 	return auth
 }
 
-func (a *Auth) NewServeMux() http.Handler {
-	return &serveMux{a}
-}
-
 func (a *Auth) AddClient(client Client) {
 	_, ok := a.clients[client.ID]
 	if ok {
@@ -59,28 +58,95 @@ func (a *Auth) AddClient(client Client) {
 func (a *Auth) GetIdentityProvider(name string) (provider.IdentityProvider, error) {
 	p, ok := a.idProviders[name]
 	if !ok {
-		return nil, errors.New("p not found")
+		return nil, errors.New("provider not found")
 	}
 	return p, nil
 }
 
-func (a *Auth) AddIdentityProvider(name string, provider provider.IdentityProvider) {
-	_, ok := a.idProviders[name]
+func (a *Auth) AddIdentityProvider(id string, provider provider.IdentityProvider) {
+	_, ok := a.idProviders[id]
 	if ok {
-		log.Fatalf("provider %v is already registered", name)
+		log.Fatalf("provider '%v' is already registered", id)
 	}
-	a.idProviders[name] = provider
+	a.idProviders[id] = provider
 }
 
 func (a *Auth) TokenHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// todo
 		// 4.1.3.  Access Token Request
 		// https://tools.ietf.org/html/rfc6749#section-4.1.3
+		clientID, clientSecret, ok := r.BasicAuth()
+		if !ok {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		var err error
+		if clientID, err = url.QueryUnescape(clientID); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		if clientSecret, err = url.QueryUnescape(clientSecret); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		client, ok := a.clients[clientID]
+		if !ok {
+			http.Error(w, "Not Found", http.StatusNotFound)
+			return
+		}
+		if client.Secret != clientSecret {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
 
-		// todo
+		grantType := r.PostFormValue("grant_type") // todo: add refresh token
+		if grantType != "authorization_code" { // todo: fix hardcoded value
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+
+		code := r.PostFormValue("code")
+		_ = r.PostFormValue("redirect_uri") // todo
+
+		_, err = a.Storage.AuthCodeRead(code)
+		if err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+		err = a.Storage.AuthCodeDelete(code)
+		if err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+
 		// 4.1.4.  Access Token Response
 		// https://tools.ietf.org/html/rfc6749#section-4.1.4
+
+		jwt, err := CreateToken("hardcoded string", a.SignKey) // todo: fix hardcode
+		if err != nil {
+			log.Println("failed to create token", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		resp := struct {
+			AccessToken string `json:"access_token"`
+			TokenType string `json:"token_type"`
+			RefreshToken string `json:"refresh_token,omitempty"`
+			ExpiresIn int `json:"expires_in"`
+		} {
+			AccessToken: jwt,
+			TokenType: "Bearer",
+			RefreshToken: "", // todo
+			ExpiresIn: 3600, // todo
+		}
+		data, err := json.Marshal(resp)
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+		w.Write(data)
 	})
 }
 
@@ -126,9 +192,16 @@ func (a *Auth) parseAuthRequest(r *http.Request) (authReq storage.AuthRequest, e
 		return
 	}
 
+	reqID, err := uuid.NewRandom()
+	if err != nil {
+		log.Println("failed to generate random uuid for auth request, error:", err)
+		err = errors.New("bad request") // todo
+		return
+	}
+
 	// todo: setup all parse fields
 	return storage.AuthRequest{
-		ID:           "todo: generate id", // todo: generate id
+		ID:           reqID.String(),
 		ClientID:     clientID,
 		RedirectURI:  redirectURI,
 		State:        state,

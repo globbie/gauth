@@ -55,6 +55,6 @@ func (p *Provider) Register(w http.ResponseWriter, r *http.Request, authReq stor
 	panic("implement me")
 }
 
-func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) {
+func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) error {
 	panic("implement me")
 }

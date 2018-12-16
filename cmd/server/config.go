@@ -84,6 +84,7 @@ func (s *Storage) UnmarshalJSON(b []byte) error {
 type Provider struct {
 	Type   string         `json:"type"`
 	Name   string         `json:"name"`
+	ID     string         `json:"id"`
 	Config ProviderConfig `json:"config"`
 }
 
@@ -101,6 +102,7 @@ func (p *Provider) UnmarshalJSON(b []byte) error {
 	var prov struct {
 		Type   string          `json:"type"`
 		Name   string          `json:"name"`
+		ID     string          `json:"id"`
 		Config json.RawMessage `json:"config"`
 	}
 	if err := json.Unmarshal(b, &prov); err != nil {
@@ -121,6 +123,7 @@ func (p *Provider) UnmarshalJSON(b []byte) error {
 	*p = Provider{
 		Type:   prov.Type,
 		Name:   prov.Name,
+		ID:     prov.ID,
 		Config: config,
 	}
 	return nil

@@ -28,6 +28,10 @@ type Storage interface {
 	AuthRequestCreate(a AuthRequest) error
 	AuthRequestRead(uid string) (AuthRequest, error)
 	AuthRequestDelete(uid string) error
+
+	AuthCodeCreate(a AuthCode) error
+	AuthCodeRead(uid string) (AuthCode, error)
+	AuthCodeDelete(uid string) error
 }
 
 type Credentials interface {
@@ -42,4 +46,11 @@ type AuthRequest struct {
 	ResponseType string
 
 	//expiry time.Time todo
+}
+
+type AuthCode struct {
+	ID       string
+	ClientID string
+
+	//Expiry time.Time
 }

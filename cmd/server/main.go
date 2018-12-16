@@ -69,14 +69,14 @@ func main() {
 	Auth.URLPrefix = "/auth/" // todo
 
 	for _, p := range cfg.Providers {
-		provider, err := p.Config.New(storage, p.Name)
+		provider, err := p.Config.New(storage, p.ID)
 		if err != nil {
 			log.Fatalf("could not create provider %v, error: %v", p, err)
 		}
-		Auth.AddIdentityProvider(p.Name, provider)
+		Auth.AddIdentityProvider(p.ID, provider)
 		view.RegisterProvider(auth.ProviderInfo{
 			Name: p.Name,
-			Url: Auth.URLPrefix + "/" + p.Name + "/login",
+			Url:  Auth.URLPrefix + "/" + p.ID + "/login",
 			Type: strings.ToLower(p.Type),
 		})
 	}
@@ -90,9 +90,10 @@ func main() {
 	}
 
 	router := http.NewServeMux()
-	router.Handle("/auth", Auth.AuthorizationHandler())
-	router.Handle("/token", Auth.TokenHandler())
-	router.Handle("/auth/", Auth.NewServeMux())
+	// todo: refactor handlers
+	router.Handle("/auth", Auth.AuthorizationHandler()) // oauth2 authorization endpoint
+	router.Handle("/auth/", Auth)
+	router.Handle("/token", Auth.TokenHandler()) // oauth2 token endpoint
 	router.Handle("/secret", Auth.AuthHandler(secretHandler()))
 
 	router.Handle("/", view)
