@@ -32,7 +32,7 @@ func (c *Config) New(s storage.Storage, id string) (provider.IdentityProvider, e
 			ClientID:     c.ClientID,
 			ClientSecret: c.ClientSecret,
 			RedirectURL:  c.RedirectURI,
-			Scopes:       []string{},
+			Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email"},
 			Endpoint:     google.Endpoint,
 		},
 	}
