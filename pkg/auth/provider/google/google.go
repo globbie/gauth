@@ -21,6 +21,7 @@ const (
 type Config struct {
 	ClientID     string `json:"client-id"`
 	ClientSecret string `json:"client-secret"`
+	RedirectURI  string `json:"redirect-uri"`
 }
 
 func (c *Config) New(s storage.Storage, id string) (provider.IdentityProvider, error) {
@@ -30,6 +31,7 @@ func (c *Config) New(s storage.Storage, id string) (provider.IdentityProvider, e
 		oauthConfig: oauth2.Config{
 			ClientID:     c.ClientID,
 			ClientSecret: c.ClientSecret,
+			RedirectURL:  c.RedirectURI,
 			Scopes:       []string{},
 			Endpoint:     google.Endpoint,
 		},
