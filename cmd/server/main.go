@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 )
 
@@ -58,36 +59,41 @@ func main() {
 		log.Fatalln("could not create storage, error:", err)
 	}
 
-	Auth := auth.New(VerifyKey, SignKey, storage)
-	Auth.URLPrefix = "/auth/" // todo
-
 	view := NewFrontedHandler(ViewConfig{
-		address: cfg.Web.HTTPAddress,
-		staticPath: "./web/static/",
+		address:       cfg.Web.HTTPAddress,
+		staticPath:    "./web/static/",
 		templatesPath: "./web/templates/",
 	})
 
+	Auth := auth.New(VerifyKey, SignKey, storage, view)
+	Auth.URLPrefix = "/auth/" // todo
+
 	for _, p := range cfg.Providers {
-		provider, err := p.Config.New(storage)
+		provider, err := p.Config.New(storage, p.ID)
 		if err != nil {
 			log.Fatalf("could not create provider %v, error: %v", p, err)
 		}
-		Auth.AddIdentityProvider(p.Name, provider)
-		view.RegisterProvider(ProviderInfo{p.Name, Auth.URLPrefix + "/" + p.Name + "/login" })
+		Auth.AddIdentityProvider(p.ID, provider)
+		view.RegisterProvider(auth.ProviderInfo{
+			Name: p.Name,
+			Url:  Auth.URLPrefix + "/" + p.ID + "/login",
+			Type: strings.ToLower(p.Type),
+		})
 	}
 	for _, c := range cfg.Clients {
 		client := auth.Client{
-			ID: c.ID,
-			Secret: c.Secret,
+			ID:           c.ID,
+			Secret:       c.Secret,
 			RedirectURIs: c.RedirectURIs,
 		}
 		Auth.AddClient(client)
 	}
 
 	router := http.NewServeMux()
-	router.Handle("/auth", Auth.AuthorizationHandler())
-	router.Handle("/token", Auth.TokenHandler())
-	router.Handle("/auth/", Auth.NewServeMux())
+	// todo: refactor handlers
+	router.Handle("/auth", Auth.AuthorizationHandler()) // oauth2 authorization endpoint
+	router.Handle("/auth/", Auth)
+	router.Handle("/token", Auth.TokenHandler()) // oauth2 token endpoint
 	router.Handle("/secret", Auth.AuthHandler(secretHandler()))
 
 	router.Handle("/", view)

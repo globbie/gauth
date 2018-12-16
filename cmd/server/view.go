@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/globbie/gauth/pkg/auth"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -15,11 +16,6 @@ const (
 	registerTemplate = "register.html"
 )
 
-type ProviderInfo struct {
-	Name string
-	Url  string
-}
-
 type view struct {
 	ViewConfig
 
@@ -30,7 +26,7 @@ type view struct {
 	register *template.Template
 	notFound *template.Template
 
-	providers []ProviderInfo
+	providers []auth.ProviderInfo
 }
 
 type ViewConfig struct {
@@ -84,7 +80,7 @@ func (v *view) loadTemplates() {
 	}
 }
 
-func (v *view) RegisterProvider(info ProviderInfo) error {
+func (v *view) RegisterProvider(info auth.ProviderInfo) error {
 	v.providers = append(v.providers, info)
 	return nil
 }
@@ -98,21 +94,21 @@ func (v *view) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch paths[1] {
 	case "":
 		data := struct {
-			Providers []ProviderInfo
+			Providers []auth.ProviderInfo
 		}{
 			v.providers,
 		}
 		v.index.Execute(w, data)
 	case "login":
 		data := struct {
-			Providers []ProviderInfo
+			Providers []auth.ProviderInfo
 		}{
 			v.providers,
 		}
 		v.login.Execute(w, data)
 	case "register":
 		data := struct {
-			Providers []ProviderInfo
+			Providers []auth.ProviderInfo
 		}{
 			v.providers,
 		}
@@ -123,4 +119,15 @@ func (v *view) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "not found", http.StatusNotFound)
 	}
+}
+
+// todo: need to pass auth-request id
+func (v *view) Login(w http.ResponseWriter, info []auth.ProviderInfo) error {
+	data := struct {
+		Providers []auth.ProviderInfo
+	}{
+		info,
+	}
+	v.login.Execute(w, data)
+	return nil
 }

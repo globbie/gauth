@@ -5,14 +5,31 @@ import (
 	"log"
 )
 
-type MemoryStorage struct {
-	data map[string]map[string]storage.Credentials
+
+// todo: select consistent function prototype style
+
+type Config struct {
+	// there is nothing to config
 }
 
-func New() *MemoryStorage {
+func (c *Config) New() (storage.Storage, error) {
+	s := New()
+	return &s, nil
+}
+
+// todo: decompose memory storage into separate storages according to their roles
+type MemoryStorage struct {
+	credentials  map[string]map[string]storage.Credentials
+	authRequests map[string]storage.AuthRequest
+	authCodes    map[string]storage.AuthCode
+}
+
+func New() MemoryStorage {
 	s := MemoryStorage{}
-	s.data = make(map[string]map[string]storage.Credentials)
-	return &s
+	s.credentials = make(map[string]map[string]storage.Credentials)
+	s.authRequests = make(map[string]storage.AuthRequest)
+	s.authCodes = make(map[string]storage.AuthCode)
+	return s
 }
 
 func (s *MemoryStorage) Close() error {
@@ -20,12 +37,12 @@ func (s *MemoryStorage) Close() error {
 }
 
 func (s *MemoryStorage) ProviderCreate(pid string) error {
-	s.data[pid] = make(map[string]storage.Credentials)
+	s.credentials[pid] = make(map[string]storage.Credentials)
 	return nil
 }
 
 func (s *MemoryStorage) UserCreate(pid string, c storage.Credentials) error {
-	providerData, ok := s.data[pid]
+	providerData, ok := s.credentials[pid]
 	if !ok {
 		log.Panicf("'%v' provider not found", pid)
 	}
@@ -38,7 +55,7 @@ func (s *MemoryStorage) UserCreate(pid string, c storage.Credentials) error {
 }
 
 func (s *MemoryStorage) UserRead(pid string, uid string) (c storage.Credentials, err error) {
-	providerData, ok := s.data[pid]
+	providerData, ok := s.credentials[pid]
 	if !ok {
 		log.Panicf("'%v' provider not found", pid)
 	}
@@ -54,7 +71,7 @@ func (s *MemoryStorage) UserUpdate(pid string, uid string, updater func(c storag
 }
 
 func (s *MemoryStorage) UserDelete(pid string, uid string) error {
-	providerData, ok := s.data[pid]
+	providerData, ok := s.credentials[pid]
 	if !ok {
 		log.Panicf("'%v' provider not found", pid)
 	}
@@ -66,12 +83,54 @@ func (s *MemoryStorage) UserDelete(pid string, uid string) error {
 	return nil
 }
 
-type Config struct {
-	// there is nothing to config
+func (s *MemoryStorage) AuthRequestCreate(a storage.AuthRequest) error {
+	_, ok := s.authRequests[a.ID]
+	if ok {
+		return storage.ErrAlreadyExists
+	}
+	s.authRequests[a.ID] = a
+	return nil
 }
 
-func (c *Config) New() (storage.Storage, error) {
-	s := MemoryStorage{}
-	s.data = make(map[string]map[string]storage.Credentials)
-	return &s, nil
+func (s *MemoryStorage) AuthRequestRead(uid string) (a storage.AuthRequest, err error) {
+	a, ok := s.authRequests[uid]
+	if !ok {
+		err = storage.ErrNotFound
+		return
+	}
+	return
+}
+
+func (s *MemoryStorage) AuthRequestDelete(uid string) error {
+	_, ok := s.authRequests[uid]
+	if !ok {
+		return storage.ErrNotFound
+	}
+	return nil
+}
+
+func (s *MemoryStorage) AuthCodeCreate(a storage.AuthCode) error {
+	_, ok := s.authCodes[a.ID]
+	if ok {
+		return storage.ErrAlreadyExists
+	}
+	s.authCodes[a.ID] = a
+	return nil
+}
+
+func (s *MemoryStorage) AuthCodeRead(uid string) (a storage.AuthCode, err error) {
+	a, ok := s.authCodes[uid]
+	if !ok {
+		err = storage.ErrNotFound
+		return
+	}
+	return
+}
+
+func (s *MemoryStorage) AuthCodeDelete(uid string) error {
+	_, ok := s.authCodes[uid]
+	if !ok {
+		return storage.ErrNotFound
+	}
+	return nil
 }

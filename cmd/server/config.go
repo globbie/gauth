@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"github.com/globbie/gauth/pkg/auth/provider"
+	"github.com/globbie/gauth/pkg/auth/provider/facebook"
 	"github.com/globbie/gauth/pkg/auth/provider/github"
 	"github.com/globbie/gauth/pkg/auth/provider/password"
 	"github.com/globbie/gauth/pkg/auth/storage"
@@ -34,8 +35,8 @@ type Frontend struct {
 }
 
 type Client struct {
-	ID string `json:"client-id"`
-	Secret string `json:"client-secret"`
+	ID           string   `json:"client-id"`
+	Secret       string   `json:"client-secret"`
 	RedirectURIs []string `json:"redirect-uris"`
 }
 
@@ -83,22 +84,25 @@ func (s *Storage) UnmarshalJSON(b []byte) error {
 type Provider struct {
 	Type   string         `json:"type"`
 	Name   string         `json:"name"`
+	ID     string         `json:"id"`
 	Config ProviderConfig `json:"config"`
 }
 
 type ProviderConfig interface {
-	New(s storage.Storage) (provider.IdentityProvider, error)
+	New(s storage.Storage, id string) (provider.IdentityProvider, error)
 }
 
 var providerConfigs = map[string]func() ProviderConfig{
-	"password": func() ProviderConfig { return new(password.Config) },
-	"github":   func() ProviderConfig { return new(github.Config) },
+	password.ProviderType: func() ProviderConfig { return new(password.Config) },
+	github.ProviderType:   func() ProviderConfig { return new(github.Config) },
+	facebook.ProviderType: func() ProviderConfig { return new(facebook.Config) },
 }
 
 func (p *Provider) UnmarshalJSON(b []byte) error {
 	var prov struct {
 		Type   string          `json:"type"`
 		Name   string          `json:"name"`
+		ID     string          `json:"id"`
 		Config json.RawMessage `json:"config"`
 	}
 	if err := json.Unmarshal(b, &prov); err != nil {
@@ -119,6 +123,7 @@ func (p *Provider) UnmarshalJSON(b []byte) error {
 	*p = Provider{
 		Type:   prov.Type,
 		Name:   prov.Name,
+		ID:     prov.ID,
 		Config: config,
 	}
 	return nil
