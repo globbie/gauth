@@ -3,23 +3,17 @@ package knowdyStorage
 import (
 	"errors"
 	"github.com/globbie/gauth/pkg/auth/storage"
-	"github.com/globbie/gnode/pkg/knowdy"
 )
 
 type KnowdyStorage struct {
-	*knowdy.Shard
 }
 
 func New(conf string) (*KnowdyStorage, error) {
-	shard, err := knowdy.New(conf)
-	if err != nil {
-		return nil, err
-	}
-	return &KnowdyStorage{Shard: shard}, nil
+	return &KnowdyStorage{}, nil
 }
 
 func (s *KnowdyStorage) Close() error {
-	return s.Del()
+	return nil
 }
 
 func (s *KnowdyStorage) ProviderCreate(pid string) error {
@@ -71,9 +65,5 @@ type Config struct {
 }
 
 func (c *Config) New() (storage.Storage, error) {
-	shard, err := knowdy.New(c.ConfigPath)
-	if err != nil {
-		return nil, err
-	}
-	return &KnowdyStorage{Shard: shard}, nil
+	return &KnowdyStorage{}, nil
 }
