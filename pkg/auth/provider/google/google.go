@@ -15,7 +15,7 @@ import (
 
 const (
 	ProviderType = "google"
-	UserInfoURL  = "https://www.googleapis.com/oauth2/v3/userinfo"
+	userInfoURL  = "https://www.googleapis.com/oauth2/v3/userinfo"
 )
 
 type Config struct {
@@ -62,6 +62,7 @@ func (p *Provider) Logout(w http.ResponseWriter, r *http.Request, authReq storag
 }
 
 func (p *Provider) Register(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) {
+	p.Login(w, r, authReq)
 }
 
 func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) error {
@@ -75,7 +76,7 @@ func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq stor
 		}
 	}
 	client := p.oauthConfig.Client(context.TODO(), token)
-	resp, err := client.Get(UserInfoURL)
+	resp, err := client.Get(userInfoURL)
 	if err != nil {
 		return auth.Error{
 			StatusCode:    http.StatusInternalServerError,
@@ -101,7 +102,7 @@ func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq stor
 		creds = Credentials{
 			Email: userInfo.Email,
 		}
-		err = p.storage.UserCreate("github", creds)
+		err = p.storage.UserCreate(p.id, creds)
 		if err != nil {
 			return auth.Error{
 				StatusCode:    http.StatusInternalServerError,

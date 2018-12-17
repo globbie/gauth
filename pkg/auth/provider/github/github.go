@@ -58,6 +58,7 @@ func (p *Provider) Logout(w http.ResponseWriter, r *http.Request, authReq storag
 }
 
 func (p *Provider) Register(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) {
+	p.Login(w, r, authReq)
 }
 
 func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) error {
@@ -93,7 +94,7 @@ func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq stor
 			ID:    strconv.FormatInt(*user.ID, 10),
 			Email: *user.Email,
 		}
-		err = p.storage.UserCreate("github", creds)
+		err = p.storage.UserCreate(p.id, creds)
 		if err != nil {
 			return auth.Error{
 				StatusCode: http.StatusInternalServerError,
