@@ -80,19 +80,7 @@ func (p *Provider) Login(w http.ResponseWriter, r *http.Request, authReq storage
 		http.Error(w, "invalid login or password", http.StatusBadRequest)
 		return
 	}
-	// todo
-	//token, err := auth.CreateToken(login, c.SignKey)
-	//if err != nil {
-	//	log.Println("failed to create token", err)
-	//	http.Error(w, "internal error", http.StatusInternalServerError)
-	//	return
-	//}
-	//response, err := json.Marshal(auth.Token{Token: token})
-	//if err != nil {
-	//	log.Print("failed to marshal json:", err)
-	//	http.Error(w, "internal server error", http.StatusInternalServerError)
-	//	return
-	//}
+
 	response := []byte("to be done")
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
@@ -137,19 +125,7 @@ func (p *Provider) Register(w http.ResponseWriter, r *http.Request, authReq stor
 		http.Error(w, "could not create user", http.StatusBadRequest)
 		return
 	}
-	// todo
-	//token, err := auth.CreateToken(email, c.SignKey)
-	//if err != nil {
-	//	log.Println("failed to create token", err)
-	//	http.Error(w, "internal error", http.StatusInternalServerError)
-	//	return
-	//}
-	//response, err := json.Marshal(auth.Token{Token: token})
-	//if err != nil {
-	//	log.Print("failed to marshal json:", err)
-	//	http.Error(w, "internal server error", http.StatusInternalServerError)
-	//	return
-	//}
+
 	response := []byte("to be done")
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
