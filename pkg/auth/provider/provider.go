@@ -23,3 +23,22 @@ type IdentityProvider interface {
 	Logout(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
 	Callback(w http.ResponseWriter, r *http.Request, request storage.AuthRequest) error
 }
+
+type Provider interface {
+	Type() string // todo: there is no need for this method. One could use reflect.TypeOf
+}
+
+type PasswordProvider interface {
+	Provider
+
+	Login(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
+	Register(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
+	Logout(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
+}
+
+type OAuthProvider interface {
+	Provider
+
+	Login(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
+	Callback(w http.ResponseWriter, r *http.Request, request storage.AuthRequest) error
+}
