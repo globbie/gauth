@@ -157,7 +157,6 @@ func (a *Auth) TokenHandler() http.Handler {
 // todo: validate all request fields
 func (a *Auth) parseAuthRequest(r *http.Request) (authReq storage.AuthRequest, err error) {
 
-
 	if err = r.ParseForm(); err != nil {
 		err = errors.New("bad request") // todo
 		return
@@ -221,7 +220,7 @@ func (a *Auth) AuthorizationHandler() http.Handler {
 		specs := header.ParseAccept(r.Header, "Accept")
 		v, err := a.ViewRouter.NegotiateView(specs)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotAcceptable)
+			http.Error(w, "Not Acceptable", http.StatusNotAcceptable)
 			return
 		}
 		authReq, err := a.parseAuthRequest(r)

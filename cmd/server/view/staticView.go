@@ -18,16 +18,16 @@ const (
 )
 
 type Config struct {
-	address       string
-	staticPath    string
-	templatesPath string
+	Address      string `json:"address"`
+	StaticDir    string `json:"static-dir"`
+	TemplatesDir string `json:"templates-dir"`
 }
 
 func (c Config) New(contentType string) (view.View, error) {
-	static := http.StripPrefix("/static/", http.FileServer(http.Dir(c.staticPath)))
+	static := http.StripPrefix("/static/", http.FileServer(http.Dir(c.StaticDir)))
 	v := View{
 		Config: c,
-		static:     static,
+		static: static,
 	}
 	v.loadTemplates()
 	return &v, nil
@@ -45,9 +45,9 @@ type View struct {
 }
 
 func (v *View) loadTemplates() {
-	files, err := ioutil.ReadDir(v.templatesPath)
+	files, err := ioutil.ReadDir(v.TemplatesDir)
 	if err != nil {
-		log.Fatalf("could not read templates c.templatesPathectory '%v', err: %v", v.templatesPath, err)
+		log.Fatalf("could not read templates c.templatesPathectory '%v', err: %v", v.TemplatesDir, err)
 	}
 
 	var fileNames []string
@@ -55,10 +55,10 @@ func (v *View) loadTemplates() {
 		if file.IsDir() {
 			continue
 		}
-		fileNames = append(fileNames, filepath.Join(v.templatesPath, file.Name()))
+		fileNames = append(fileNames, filepath.Join(v.TemplatesDir, file.Name()))
 	}
 	if len(fileNames) == 0 {
-		log.Fatalf("no templates were found in '%v'", v.templatesPath)
+		log.Fatalf("no templates were found in '%v'", v.TemplatesDir)
 	}
 	templates, err := template.ParseFiles(fileNames...)
 	if err != nil {

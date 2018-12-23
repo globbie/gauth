@@ -3,6 +3,7 @@ package view
 import (
 	"errors"
 	"github.com/golang/gddo/httputil/header"
+	"log"
 	"net/http"
 )
 
@@ -24,21 +25,21 @@ type Router struct {
 }
 
 func NewRouter() Router {
-	router := Router {
+	router := Router{
 		views: make(map[ContentType]View),
 	}
 	return router
 }
 
 func (r *Router) RegisterContentType(ct ContentType, v View) error {
+	r.views[ct] = v
 	return nil
 }
 
-func (r *Router) RegisterProvider(p ProviderInfo) error {
-	return nil
-}
-
+// todo: handle <type>/* and */* specs
 func (r *Router) NegotiateView(specs []header.AcceptSpec) (View, error) {
+	log.Println(specs)
+	log.Println(r.views)
 	for _, spec := range specs {
 		view, ok := r.views[ContentType(spec.Value)]
 		if !ok {

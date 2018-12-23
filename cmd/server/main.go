@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"time"
 )
 
@@ -79,12 +78,6 @@ func main() {
 			log.Fatalf("could not create provider %v, error: %v", p, err)
 		}
 		Auth.AddIdentityProvider(p.ID, provider)
-
-		_ = vRouter.RegisterProvider(view.ProviderInfo{
-			Name: p.Name,
-			Url: Auth.URLPrefix + "/" + p.ID + "/login",
-			Type: strings.ToLower(p.Type),
-		})
 	}
 	for _, c := range cfg.Clients {
 		client := auth.Client{
@@ -99,7 +92,7 @@ func main() {
 	// todo: refactor handlers
 	router.Handle("/auth", Auth.AuthorizationHandler()) // oauth2 authorization endpoint
 	router.Handle("/auth/", Auth)
-	router.Handle("/token", Auth.TokenHandler()) // oauth2 token endpoint
+	router.Handle("/token", Auth.TokenHandler())                    // oauth2 token endpoint
 	router.Handle("/secret", Auth.ResourceHandler(secretHandler())) // oauth2 resource "server"
 
 	//router.Handle("/", staticView)

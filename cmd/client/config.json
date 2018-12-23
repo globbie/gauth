@@ -3,7 +3,7 @@
   "client-id": "example-client",
   "client-secret": "12345",
   "redirect-uri": "http://localhost:8083/callback",
-  "authorization-endpoint": "https://localhost:8081/auth",
+  "authorization-endpoint": "http://localhost:8081/auth",
   "token-endpoint": "http://localhost:8081/token",
   "www-dir": "web"
 }
