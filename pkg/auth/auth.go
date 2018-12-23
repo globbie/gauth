@@ -6,8 +6,12 @@ import (
 	"errors"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
+	"github.com/golang/gddo/httputil/header"
+
 	"github.com/globbie/gauth/pkg/auth/provider"
 	"github.com/globbie/gauth/pkg/auth/storage"
+	"github.com/globbie/gauth/pkg/auth/view"
+
 	"github.com/google/uuid"
 	"log"
 	"net/http"
@@ -30,19 +34,19 @@ type Auth struct {
 	VerifyKey *rsa.PublicKey
 	SignKey   *rsa.PrivateKey
 
-	Storage storage.Storage
-	View    View
+	Storage    storage.Storage
+	ViewRouter view.Router
 }
 
 // todo: delete this factory
-func New(verifyKey *rsa.PublicKey, signKey *rsa.PrivateKey, storage storage.Storage, view View) *Auth {
+func New(verifyKey *rsa.PublicKey, signKey *rsa.PrivateKey, storage storage.Storage, vr view.Router) *Auth {
 	auth := &Auth{
 		idProviders: make(map[string]provider.IdentityProvider),
 		clients:     make(map[string]Client),
 		VerifyKey:   verifyKey,
 		SignKey:     signKey,
 		Storage:     storage,
-		View:        view,
+		ViewRouter:  vr,
 	}
 	return auth
 }
@@ -100,7 +104,7 @@ func (a *Auth) TokenHandler() http.Handler {
 		}
 
 		grantType := r.PostFormValue("grant_type") // todo: add refresh token
-		if grantType != "authorization_code" { // todo: fix hardcoded value
+		if grantType != "authorization_code" {     // todo: fix hardcoded value
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
@@ -129,15 +133,15 @@ func (a *Auth) TokenHandler() http.Handler {
 			return
 		}
 		resp := struct {
-			AccessToken string `json:"access_token"`
-			TokenType string `json:"token_type"`
+			AccessToken  string `json:"access_token"`
+			TokenType    string `json:"token_type"`
 			RefreshToken string `json:"refresh_token,omitempty"`
-			ExpiresIn int `json:"expires_in"`
-		} {
-			AccessToken: jwt,
-			TokenType: "Bearer",
-			RefreshToken: "", // todo
-			ExpiresIn: 3600, // todo
+			ExpiresIn    int    `json:"expires_in"`
+		}{
+			AccessToken:  jwt,
+			TokenType:    "Bearer",
+			RefreshToken: "",   // todo
+			ExpiresIn:    3600, // todo
 		}
 		data, err := json.Marshal(resp)
 		if err != nil {
@@ -152,6 +156,8 @@ func (a *Auth) TokenHandler() http.Handler {
 
 // todo: validate all request fields
 func (a *Auth) parseAuthRequest(r *http.Request) (authReq storage.AuthRequest, err error) {
+
+
 	if err = r.ParseForm(); err != nil {
 		err = errors.New("bad request") // todo
 		return
@@ -212,6 +218,12 @@ func (a *Auth) parseAuthRequest(r *http.Request) (authReq storage.AuthRequest, e
 // only authorization code grant flow for now
 func (a *Auth) AuthorizationHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		specs := header.ParseAccept(r.Header, "Accept")
+		v, err := a.ViewRouter.NegotiateView(specs)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotAcceptable)
+			return
+		}
 		authReq, err := a.parseAuthRequest(r)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -222,37 +234,23 @@ func (a *Auth) AuthorizationHandler() http.Handler {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 			return
 		}
-		providersInfo := make([]ProviderInfo, 0, len(a.idProviders))
-		for name, p:= range a.idProviders {
-			providersInfo = append(providersInfo, ProviderInfo{
+		providersInfo := make([]view.ProviderInfo, 0, len(a.idProviders))
+		for name, p := range a.idProviders {
+			providersInfo = append(providersInfo, view.ProviderInfo{
 				Name: name,
-				Url: "/auth/" + name + "/login" + "?req=" + authReq.ID,
+				Url:  "/auth/" + name + "/login" + "?req=" + authReq.ID,
 				Type: p.Type(),
 			})
 		}
-		err = a.View.Login(w, providersInfo)
+		err = v.Login(w, providersInfo)
 		if err != nil {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 		}
-		/*
-			u, err := url.Parse(redirectURI)
-			if err != nil {
-				log.Printf("failed to parse redirect uri '%v', error: %v", redirectURI, err)
-				http.Error(w, "internal error", http.StatusInternalServerError)
-				return
-			}
-			q := u.Query()
-			q.Set("code", "123") // todo
-			q.Set("state", state)
-			u.RawQuery = q.Encode()
-
-			http.Redirect(w, r, u.String(), http.StatusSeeOther)
-		*/
 	})
 }
 
 // todo: change handler name
-func (a *Auth) AuthHandler(h http.Handler) http.Handler {
+func (a *Auth) ResourceHandler(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, err := request.ParseFromRequest(r, request.AuthorizationHeaderExtractor, func(token *jwt.Token) (interface{}, error) {
 			return a.VerifyKey, nil

@@ -2,15 +2,21 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/globbie/gauth/cmd/server/view"
+	"log"
+
 	"github.com/globbie/gauth/pkg/auth/provider"
 	"github.com/globbie/gauth/pkg/auth/provider/facebook"
 	"github.com/globbie/gauth/pkg/auth/provider/github"
 	"github.com/globbie/gauth/pkg/auth/provider/google"
 	"github.com/globbie/gauth/pkg/auth/provider/password"
+
 	"github.com/globbie/gauth/pkg/auth/storage"
 	"github.com/globbie/gauth/pkg/auth/storage/knowdy"
 	"github.com/globbie/gauth/pkg/auth/storage/memory"
-	"log"
+
+	"github.com/globbie/gauth/pkg/auth/view"
+	jsonView "github.com/globbie/gauth/pkg/auth/view/json"
 )
 
 type Config struct {
@@ -20,6 +26,7 @@ type Config struct {
 	Providers []Provider `json:"providers"`
 	Frontend  Frontend   `json:"frontend"`
 	Clients   []Client   `json:"clients"`
+	Views     []View     `json:"views"`
 }
 
 type Web struct {
@@ -118,7 +125,7 @@ func (p *Provider) UnmarshalJSON(b []byte) error {
 	if len(prov.Config) != 0 {
 		configData := []byte(string(prov.Config))
 		if err := json.Unmarshal(configData, &config); err != nil {
-			log.Fatalf("fail to parse %v provider config, error: %v", prov.Type, err)
+			log.Fatalf("failed to parse %v provider config, error: %v", prov.Type, err)
 		}
 
 	}
@@ -127,6 +134,50 @@ func (p *Provider) UnmarshalJSON(b []byte) error {
 		Name:   prov.Name,
 		ID:     prov.ID,
 		Config: config,
+	}
+	return nil
+}
+
+type View struct {
+	ContentType string     `json:"content-type"`
+	Type        string     `json:"type"`
+	Config      ViewConfig `json:"config"`
+}
+
+// todo: such an interfaces should be moved to corresponded modules
+type ViewConfig interface {
+	New(contentType string) (view.View, error)
+}
+
+var viewConfigs = map[string]func() ViewConfig{
+	jsonView.ViewType:   func() ViewConfig { return new(jsonView.Config) },
+	staticView.ViewType: func() ViewConfig { return new(staticView.Config) },
+}
+
+func (v *View) UnmarshalJSON(b []byte) error {
+	var viewCfg struct {
+		ContentType string          `json:"content-type"`
+		Type        string          `json:"type"`
+		Config      json.RawMessage `json:"config"`
+	}
+	if err := json.Unmarshal(b, &viewCfg); err != nil {
+		log.Fatalln("parse view config:", err)
+	}
+	f, ok := viewConfigs[viewCfg.Type]
+	if !ok {
+		log.Fatalf("%v view type is not implemented", viewCfg.Type)
+	}
+	config := f()
+	if len(viewCfg.Config) != 0 {
+		configData := []byte(string(viewCfg.Config))
+		if err := json.Unmarshal(configData, &config); err != nil {
+			log.Fatalf("failed to parse %v view config, error: %v", viewCfg.Type, err)
+		}
+	}
+	*v = View{
+		ContentType: viewCfg.ContentType,
+		Type:        viewCfg.Type,
+		Config:      config,
 	}
 	return nil
 }

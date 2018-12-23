@@ -5,7 +5,6 @@ import (
 	"log"
 )
 
-
 // todo: select consistent function prototype style
 
 type Config struct {
