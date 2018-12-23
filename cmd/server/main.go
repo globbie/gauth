@@ -7,12 +7,12 @@ import (
 	"flag"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/globbie/gauth/pkg/auth"
+	"github.com/globbie/gauth/pkg/auth/view"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"time"
 )
 
@@ -59,14 +59,18 @@ func main() {
 		log.Fatalln("could not create storage, error:", err)
 	}
 
-	view := NewFrontedHandler(ViewConfig{
-		address:       cfg.Web.HTTPAddress,
-		staticPath:    "./web/static/",
-		templatesPath: "./web/templates/",
-	})
+	vRouter := view.NewRouter()
 
-	Auth := auth.New(VerifyKey, SignKey, storage, view)
+	Auth := auth.New(VerifyKey, SignKey, storage, vRouter)
 	Auth.URLPrefix = "/auth/" // todo
+
+	for _, cView := range cfg.Views {
+		v, err := cView.Config.New(cView.ContentType)
+		if err != nil {
+			log.Fatalf("could not create view %v, error: %v", cView, err)
+		}
+		vRouter.RegisterContentType(view.ContentType(cView.ContentType), v)
+	}
 
 	for _, p := range cfg.Providers {
 		provider, err := p.Config.New(storage, p.ID)
@@ -74,11 +78,6 @@ func main() {
 			log.Fatalf("could not create provider %v, error: %v", p, err)
 		}
 		Auth.AddIdentityProvider(p.ID, provider)
-		view.RegisterProvider(auth.ProviderInfo{
-			Name: p.Name,
-			Url:  Auth.URLPrefix + "/" + p.ID + "/login",
-			Type: strings.ToLower(p.Type),
-		})
 	}
 	for _, c := range cfg.Clients {
 		client := auth.Client{
@@ -93,10 +92,10 @@ func main() {
 	// todo: refactor handlers
 	router.Handle("/auth", Auth.AuthorizationHandler()) // oauth2 authorization endpoint
 	router.Handle("/auth/", Auth)
-	router.Handle("/token", Auth.TokenHandler()) // oauth2 token endpoint
-	router.Handle("/secret", Auth.AuthHandler(secretHandler()))
+	router.Handle("/token", Auth.TokenHandler())                    // oauth2 token endpoint
+	router.Handle("/secret", Auth.ResourceHandler(secretHandler())) // oauth2 resource "server"
 
-	router.Handle("/", view)
+	//router.Handle("/", staticView)
 
 	server := &http.Server{
 		Addr:         cfg.Web.HTTPAddress,

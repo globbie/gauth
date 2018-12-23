@@ -66,8 +66,8 @@ func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq stor
 	token, err := p.oauthConfig.Exchange(context.TODO(), code)
 	if err != nil {
 		return auth.Error{
-			StatusCode: http.StatusBadRequest,
-			Message: fmt.Sprint("oauth exchange failed:", err.Error()),
+			StatusCode:    http.StatusBadRequest,
+			Message:       fmt.Sprint("oauth exchange failed:", err.Error()),
 			PublicMessage: "Bad Request",
 		}
 	}
@@ -76,16 +76,16 @@ func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq stor
 	user, _, err := githubClient.Users.Get(context.TODO(), "")
 	if err != nil {
 		return auth.Error{
-			StatusCode: http.StatusBadRequest,
-			Message: fmt.Sprint("oauth exchange failed:", err.Error()),
+			StatusCode:    http.StatusBadRequest,
+			Message:       fmt.Sprint("oauth exchange failed:", err.Error()),
 			PublicMessage: "Bad Request",
 		}
 	}
 	creds, err := p.storage.UserRead(p.id, strconv.FormatInt(*user.ID, 10))
 	if err != nil && err != storage.ErrNotFound {
 		return auth.Error{
-			StatusCode: http.StatusInternalServerError,
-			Message: fmt.Sprint("failed to get user from storage:", err.Error()),
+			StatusCode:    http.StatusInternalServerError,
+			Message:       fmt.Sprint("failed to get user from storage:", err.Error()),
 			PublicMessage: "Internal Error",
 		}
 	}
@@ -97,8 +97,8 @@ func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq stor
 		err = p.storage.UserCreate(p.id, creds)
 		if err != nil {
 			return auth.Error{
-				StatusCode: http.StatusInternalServerError,
-				Message: fmt.Sprint("could not create user:", err.Error()),
+				StatusCode:    http.StatusInternalServerError,
+				Message:       fmt.Sprint("could not create user:", err.Error()),
 				PublicMessage: "Internal Error",
 			}
 		}

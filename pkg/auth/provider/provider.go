@@ -7,7 +7,7 @@ import (
 
 /*
  * todo-list:
- * 1. OAuth providers do not need to implement Register methods. So, there should be another interface.
+ * 1. OAuth providers do not need to implement RegisterContentType methods. So, there should be another interface.
  * 2. OAuth providers do not need to implement Logout. So, ...
  * 3. Password providers do not need to implement Callback. So, ...
  * 4. OAuth callback functions are 85% the same. So, there should be common methods.
