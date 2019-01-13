@@ -1,10 +1,12 @@
+// +build password_tests
+
 package password
 
 import (
 	"crypto/rsa"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/globbie/gnode/pkg/auth/ctx"
-	"github.com/globbie/gnode/pkg/auth/storage/memory"
+	"github.com/globbie/gauth/pkg/auth/ctx"
+	"github.com/globbie/gauth/pkg/auth/storage/memory"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -38,7 +40,7 @@ func TestRegister(t *testing.T) {
 	defer storage.Close()
 	privateKey, publicKey := getKeysPair(t)
 
-	provider := NewProvider(storage)
+	provider := New(storage)
 
 	form := url.Values{
 		"login":    {"test@example.com"},
