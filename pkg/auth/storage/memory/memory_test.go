@@ -7,5 +7,5 @@ import (
 
 func TestStorage(t *testing.T) {
 	s := New()
-	storage.CRUDCheckRun(t, s)
+	storage.CRUDCheckRun(t, &s)
 }
