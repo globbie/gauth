@@ -82,30 +82,36 @@ func (a *Auth) TokenHandler() http.Handler {
 		clientID, clientSecret, ok := r.BasicAuth()
 		if !ok {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
+			log.Println("r.BasicAuth() failed")
 			return
 		}
 		var err error
 		if clientID, err = url.QueryUnescape(clientID); err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
+			log.Println("QueryUnescape(clientID) failed, err:", err)
 			return
 		}
 		if clientSecret, err = url.QueryUnescape(clientSecret); err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
+			log.Println("QueryUnescape(clientSecret) failed, err:", err)
 			return
 		}
 		client, ok := a.clients[clientID]
 		if !ok {
 			http.Error(w, "Not Found", http.StatusNotFound)
+			log.Printf("client not found: '%s'", clientID)
 			return
 		}
 		if client.Secret != clientSecret {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
+			log.Printf("clientSecret mismatch: '%s' != '%s'", client.Secret, clientSecret)
 			return
 		}
 
 		grantType := r.PostFormValue("grant_type") // todo: add refresh token
 		if grantType != "authorization_code" {     // todo: fix hardcoded value
 			http.Error(w, "Bad Request", http.StatusBadRequest)
+			log.Println("grant_type is not set")
 			return
 		}
 
@@ -115,11 +121,13 @@ func (a *Auth) TokenHandler() http.Handler {
 		_, err = a.Storage.AuthCodeRead(code)
 		if err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
+			log.Println("failed to get auth code")
 			return
 		}
 		err = a.Storage.AuthCodeDelete(code)
 		if err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
+			log.Println("failed to delete auth code")
 			return
 		}
 
