@@ -16,7 +16,7 @@ after_success:
   - export TAG=`if [ "$TRAVIS_BRANCH" == "master" ]; then echo "latest"; else echo "devel" ; fi`
   - echo $REPO:$TAG
   - docker build -f Dockerfile -t $REPO:$TAG .
-  - docker push $REPO
+  - 'if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then docker push $REPO ; fi'
 notifications:
   slack:
     secure: yc+4ay2MNwX2mhg8w7T6Nzdt3E90+jCx3uok46s2gTVWhmjGbotf7KlWisn5cMwRCpjeeWQ7gw3951daA1ru2WEhvYhyKg1JA16aIGQJqY2BHQ2xwy6Blt9a2fhEPO+UfLkyc3POEJKAXqmOq5NqWyxAqQrM8l0bPiU1WaX0vupjBABG+49arzilfgA6bHAiKGsL2CMpR/iJ8sDe6RwLk+O1Dv0VqGI55uLmYEisy8Tf2O3x3muigXtkOiGi7L2lUyw13yydVjmmC3sRbTGXni0JJmPPYqMgI9M9SpfLDzBH6GZjMO95H+jrv39hKfx0uIUnI1e51muOfzgL4k5VmjYl8biZ5SSDaB2GrUQG4fR940S8ifIMqqm9RMaPEjtLWDthKKiZaQvtw8/2D04p89uh0CzO2UwdHy70IQJ4acgQayu3MSo3KZlYh6zO1AgnlqTQnEkNk50D/DhKWr+oQlAcoQqcfyHxi4cZmC3RGS9aUQzHjkgH8oWEoizIKJH+7mFD7ncBYsDR+3P2qd+GklLNcl+f2xMKKz0xEWg0E1DnyRgLeBohQODuiAoHSiDZOigMfDphZYW8IK5ybRTnx3nBIquV6nHm1eN/P2eWvV+oqLzivaNTsc8j4My1+g8h2vdUK9VRhK4y6aj8yp1OqHqkAeBG7IHGCTibei2g6NU=
