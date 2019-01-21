@@ -31,5 +31,39 @@
   ],
   "frontend": {
     "dir": "web/templates"
-  }
+  },
+  "clients": [
+    {
+      "client-id": "example-client",
+      "client-secret": "12345",
+      "redirect-uris": [
+        "http://localhost:8083/callback"
+      ],
+      "pkce": false
+    },
+    {
+      "client-id": "example-pkce-client",
+      "redirect-uris": [
+        "http://localhost:8083/callback"
+      ],
+      "pkce": true
+    }
+  ],
+  "views": [
+    {
+      "content-type": "text/html",
+      "type": "static",
+      "config": {
+        "templates-dir": "web/templates",
+        "static-dir": "web/static"
+      }
+    },
+    {
+      "content-type": "application/json",
+      "type": "json",
+      "config": {
+        "indent": "  "
+      }
+    }
+  ]
 }

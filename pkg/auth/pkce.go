@@ -9,9 +9,14 @@ import (
 )
 
 type CodeVerifier string
+
 type CodeChallenge struct {
-	Challenge string
-	Method    string
+	Challenge string `json:"code-challenge"`
+	Method    string `json:"code-challenge-method"`
+}
+
+func (c CodeChallenge) String() string {
+	return c.Challenge
 }
 
 const TransformationPlain = "plain"
@@ -53,6 +58,17 @@ func NewCodeChallenge(v CodeVerifier, t string) (CodeChallenge, error) {
 	}
 	encoded := base64.RawURLEncoding.EncodeToString([]byte(transformedCode))
 	return CodeChallenge{string(encoded), t}, nil
+}
+
+func NewCodeChallengeFromString(s string, t string) (CodeChallenge, error) {
+	switch t {
+	case TransformationPlain:
+	case TransformationS256:
+	default:
+		return CodeChallenge{}, ErrUnsupportedTransformation
+
+	}
+	return CodeChallenge{s, t}, nil
 }
 
 func CompareVerifierAndChallenge(v CodeVerifier, c CodeChallenge) error {

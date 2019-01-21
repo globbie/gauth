@@ -23,6 +23,7 @@ type Client struct {
 	ID           string
 	Secret       string
 	RedirectURIs []string
+	PKCE         bool
 }
 
 type Auth struct {
@@ -102,10 +103,41 @@ func (a *Auth) TokenHandler() http.Handler {
 			log.Printf("client not found: '%s'", clientID)
 			return
 		}
-		if client.Secret != clientSecret {
+
+		code := r.PostFormValue("code")
+
+		authCode, err := a.Storage.AuthCodeRead(code)
+		if err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
-			log.Printf("clientSecret mismatch: '%s' != '%s'", client.Secret, clientSecret)
+			log.Println("failed to get auth code")
 			return
+		}
+
+		if client.PKCE {
+			codeVerifier := r.PostFormValue("code_verifier")
+			if codeVerifier == "" {
+				http.Error(w, "invalid_grant", http.StatusBadRequest) // todo
+				log.Println("missing code_verifier")
+				return
+			}
+			codeChallenge, err := NewCodeChallengeFromString(codeVerifier, authCode.CodeChallengeMethod)
+			if err == ErrUnsupportedTransformation {
+				http.Error(w, "invalid_grant", http.StatusBadRequest) // todo
+				log.Println("unknown code challenge method")
+				return
+			}
+			err = CompareVerifierAndChallenge(CodeVerifier(codeVerifier), codeChallenge)
+			if err != nil {
+				http.Error(w, "invalid_grant", http.StatusBadRequest) // todo
+				log.Println("invalid code verifier")
+				return
+			}
+		} else {
+			if client.Secret != clientSecret {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				log.Printf("clientSecret mismatch: '%s' != '%s'", client.Secret, clientSecret)
+				return
+			}
 		}
 
 		grantType := r.PostFormValue("grant_type") // todo: add refresh token
@@ -115,15 +147,8 @@ func (a *Auth) TokenHandler() http.Handler {
 			return
 		}
 
-		code := r.PostFormValue("code")
 		_ = r.PostFormValue("redirect_uri") // todo
 
-		_, err = a.Storage.AuthCodeRead(code)
-		if err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			log.Println("failed to get auth code")
-			return
-		}
 		err = a.Storage.AuthCodeDelete(code)
 		if err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
@@ -164,7 +189,6 @@ func (a *Auth) TokenHandler() http.Handler {
 
 // todo: validate all request fields
 func (a *Auth) parseAuthRequest(r *http.Request) (authReq storage.AuthRequest, err error) {
-
 	if err = r.ParseForm(); err != nil {
 		err = errors.New("bad request") // todo
 		return
@@ -204,21 +228,39 @@ func (a *Auth) parseAuthRequest(r *http.Request) (authReq storage.AuthRequest, e
 		err = errors.New("bad request") // todo
 		return
 	}
-
+	var (
+		codeChallenge       string
+		codeChallengeMethod string
+	)
+	if client.PKCE && responseType == "code" {
+		codeChallenge = r.Form.Get("code_challenge")
+		if codeChallenge == "" {
+			log.Println("code_challenge is missing")
+			err = errors.New("invalid_request") // todo
+			return
+		}
+		codeChallengeMethod = r.Form.Get("code_challenge_method")
+		if codeChallengeMethod == "" {
+			log.Println("code_challenge_method is missing")
+			err = errors.New("invalid_request") // todo
+			return
+		}
+	}
 	reqID, err := uuid.NewRandom()
 	if err != nil {
 		log.Println("failed to generate random uuid for auth request, error:", err)
 		err = errors.New("bad request") // todo
 		return
 	}
-
 	// todo: setup all parse fields
 	return storage.AuthRequest{
-		ID:           reqID.String(),
-		ClientID:     clientID,
-		RedirectURI:  redirectURI,
-		State:        state,
-		ResponseType: responseType,
+		ID:                  reqID.String(),
+		ClientID:            clientID,
+		RedirectURI:         redirectURI,
+		State:               state,
+		ResponseType:        responseType,
+		CodeChallenge:       codeChallenge,
+		CodeChallengeMethod: codeChallengeMethod,
 	}, nil
 }
 

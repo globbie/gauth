@@ -11,6 +11,7 @@ var (
 )
 
 // todo: make separate interfaces for users, auth-requests and providers
+// todo: move storage interface to auth module
 
 type Storage interface {
 	Close() error
@@ -38,6 +39,7 @@ type Credentials interface {
 	UID() string
 }
 
+// todo(n.rodionov): move this struct to auth module
 type AuthRequest struct {
 	ID           string
 	ClientID     string
@@ -45,12 +47,19 @@ type AuthRequest struct {
 	State        string
 	ResponseType string
 
+	// PKCE extension
+	CodeChallenge       string
+	CodeChallengeMethod string
+
 	//expiry time.Time todo
 }
 
 type AuthCode struct {
 	ID       string
 	ClientID string
+
+	CodeChallenge       string
+	CodeChallengeMethod string
 
 	//Expiry time.Time
 }
