@@ -84,6 +84,7 @@ func main() {
 			ID:           c.ID,
 			Secret:       c.Secret,
 			RedirectURIs: c.RedirectURIs,
+			PKCE:         c.PKCE,
 		}
 		Auth.AddClient(client)
 	}

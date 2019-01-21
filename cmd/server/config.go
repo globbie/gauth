@@ -46,6 +46,7 @@ type Client struct {
 	ID           string   `json:"client-id"`
 	Secret       string   `json:"client-secret"`
 	RedirectURIs []string `json:"redirect-uris"`
+	PKCE         bool     `json:"pkce"`
 }
 
 type Storage struct {
