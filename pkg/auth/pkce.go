@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"math/rand"
+	"time"
 )
 
 type CodeVerifier string
@@ -32,14 +33,14 @@ var ErrInvalidCodeVerifierLen = errors.New("auth/pkce: invalid code verifier len
 var ErrUnsupportedTransformation = errors.New("auth/pkce: unsupported code verifier transformation method")
 
 // todo(n.rodionov): use masking instead of getting the remainder
-// todo(n.rodionov): use cryptographically secure pseudorandom number generator
 func NewCodeVerifier(length int) (CodeVerifier, error) {
+	randSource := rand.NewSource(time.Now().UnixNano())
 	if length < CodeVerifierLenMin || length > CodeVerifierLenMax {
 		return "", ErrInvalidCodeVerifierLen
 	}
 	c := make([]byte, length)
 	for i := range c {
-		c[i] = alphabet[rand.Int63()%int64(len(alphabet))]
+		c[i] = alphabet[randSource.Int63()%int64(len(alphabet))]
 	}
 	return CodeVerifier(c), nil
 }
