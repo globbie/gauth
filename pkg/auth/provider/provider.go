@@ -23,3 +23,14 @@ type IdentityProvider interface {
 	Logout(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
 	Callback(w http.ResponseWriter, r *http.Request, request storage.AuthRequest) error
 }
+
+type Provider interface{}
+
+type OAuthProvider interface {
+	Login(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
+	Callback(w http.ResponseWriter, r *http.Request, request storage.AuthRequest) error
+}
+
+type PasswordProvider interface {
+	Login(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
+}
