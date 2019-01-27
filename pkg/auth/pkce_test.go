@@ -102,4 +102,3 @@ func TestCompareVerifierAndChallenge(t *testing.T) {
 		}
 	}
 }
-

@@ -18,14 +18,14 @@ type Config struct {
 
 func (c *Config) New(s storage.Storage, id string) (provider.IdentityProvider, error) {
 	p := Provider{
-		id: id,
+		id:      id,
 		storage: s,
 		oauthConfig: oauth2.Config{
-			ClientID: c.ClientID,
+			ClientID:     c.ClientID,
 			ClientSecret: c.ClientSecret,
-			RedirectURL: c.RedirectURI,
-			Scopes: []string{"TODO"}, // todo
-			Endpoint: "123", //todo
+			RedirectURL:  c.RedirectURI,
+			Scopes:       []string{"TODO"}, // todo
+			Endpoint:     oauth2.Endpoint{},            //todo
 		},
 	}
 	err := s.ProviderCreate(id)
@@ -36,8 +36,8 @@ func (c *Config) New(s storage.Storage, id string) (provider.IdentityProvider, e
 }
 
 type Provider struct {
-	id string
-	storage storage.Storage
+	id          string
+	storage     storage.Storage
 	oauthConfig oauth2.Config
 }
 

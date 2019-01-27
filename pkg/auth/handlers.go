@@ -55,9 +55,9 @@ func (a *Auth) CallbackHandler(w http.ResponseWriter, r *http.Request, p provide
 		return
 	}
 	authCode := storage.AuthCode{
-		ID:       authCodeUUID.String(),
-		ClientID: authReq.ClientID,
-		CodeChallenge: authReq.CodeChallenge,
+		ID:                  authCodeUUID.String(),
+		ClientID:            authReq.ClientID,
+		CodeChallenge:       authReq.CodeChallenge,
 		CodeChallengeMethod: authReq.CodeChallengeMethod,
 	}
 	err = a.Storage.AuthCodeCreate(authCode)
