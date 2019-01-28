@@ -30,7 +30,7 @@ type Auth struct {
 	URLPrefix string
 
 	idProviders map[string]provider.IdentityProvider
-	clients     map[string]Client
+	clients     map[string]*Client
 
 	VerifyKey *rsa.PublicKey
 	SignKey   *rsa.PrivateKey
@@ -43,7 +43,7 @@ type Auth struct {
 func New(verifyKey *rsa.PublicKey, signKey *rsa.PrivateKey, storage storage.Storage, vr view.Router) *Auth {
 	auth := &Auth{
 		idProviders: make(map[string]provider.IdentityProvider),
-		clients:     make(map[string]Client),
+		clients:     make(map[string]*Client),
 		VerifyKey:   verifyKey,
 		SignKey:     signKey,
 		Storage:     storage,
@@ -57,7 +57,7 @@ func (a *Auth) AddClient(client Client) {
 	if ok {
 		log.Fatalf("client %v is already registered", client.ID)
 	}
-	a.clients[client.ID] = client
+	a.clients[client.ID] = &client
 }
 
 func (a *Auth) GetIdentityProvider(name string) (provider.IdentityProvider, error) {
@@ -187,81 +187,181 @@ func (a *Auth) TokenHandler() http.Handler {
 	})
 }
 
-// todo: validate all request fields
-func (a *Auth) parseAuthRequest(r *http.Request) (authReq storage.AuthRequest, err error) {
-	if err = r.ParseForm(); err != nil {
-		err = errors.New("bad request") // todo
-		return
+func uniqueParameter(name string, form url.Values) (string, bool) {
+	vals, ok := form[name]
+	if ok && len(vals) == 1 {
+		return vals[0], true
 	}
-	redirectURI, err := url.QueryUnescape(r.Form.Get("redirect_uri"))
-	if err != nil {
-		err = errors.New("bad request") // todo
-		return
+	return "", !ok // true if not specified, false if included more than once
+}
+
+func filterParameters(allowedNames []string, form url.Values) (map[string]string, bool) {
+	// Parameters sent without a value MUST be treated as if they were
+	// omitted from the request.  The authorization server MUST ignore
+	// unrecognized request parameters.  Request and response parameters
+	// MUST NOT be included more than once.
+	result := make(map[string]string)
+	success := true
+	for _, name := range allowedNames {
+		if vals, ok := form[name]; ok {
+			if len(vals) != 1 {
+				success = false
+				// `name` is included more than once, but continue processing to return all valid parameters
+			} else if vals[0] != "" {
+				result[name] = vals[0]
+			}
+		}
 	}
-	clientID := r.Form.Get("client_id")
-	client, ok := a.clients[clientID]
+	return result, success
+}
+
+func (a *Auth) validateAuthorizationRequest(w http.ResponseWriter, r *http.Request) map[string]string {
+	//
+	// At this point, we have to send errors directly to resource owner:
+	//
+
+	if r.Method != "GET" && r.Method != "POST" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		log.Printf("405 method not allowed, method: %v", r.Method)
+		return nil
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "non-parsable request", http.StatusBadRequest)
+		log.Printf("400 http.Request.ParseForm() failed, err: %v", err)
+		return nil
+	}
+
+	clientID, ok := uniqueParameter("client_id", r.Form)
+	if !ok || clientID == "" {
+		http.Error(w, "client_id is missing or invalid", http.StatusBadRequest)
+		log.Printf("400 client_id is missing or included more than once, form: %v", r.Form["client_id"])
+		return nil
+	}
+	client := a.clients[clientID]
+	if client == nil {
+		http.Error(w, "client_id is missing or invalid", http.StatusBadRequest)
+		log.Printf("400 client_id not registered, client_id: %v", clientID)
+		return nil
+	}
+
+	redirectURI, ok := uniqueParameter("redirect_uri", r.Form)
 	if !ok {
-		log.Printf("client %v not found", clientID)
-		err = errors.New("bad request") // todo
-		return
+		http.Error(w, "redirect_uri is missing or invalid", http.StatusBadRequest)
+		log.Printf("400 redirect_uri is included more than once, form: %v", r.Form["redirect_uri"])
+		return nil
 	}
-	uriValid := false
-	for _, uri := range client.RedirectURIs {
-		if redirectURI == uri {
-			uriValid = true
+	if redirectURI != "" {
+		var err error
+		redirectURI, err = url.QueryUnescape(redirectURI) // TODO(k15tfu): is it really required?
+		if err != nil {
+			http.Error(w, "redirect_uri is missing or invalid", http.StatusBadRequest)
+			log.Printf("400 url.QueryUnescape() failed, err: %v", err)
+			return nil
 		}
-	}
-	if !uriValid {
-		log.Println("no matching uri found")
-		err = errors.New("bad request") // todo
-		return
-	}
-	state := r.Form.Get("state")
-	if state == "" {
-		log.Println("'state' is empty")
-		err = errors.New("bad request") // todo
-		return
-	}
-	responseType := r.Form.Get("response_type")
-	if responseType != "code" { // temporary hardcoded for authorization code grant type
-		log.Println("response_type must be 'code'")
-		err = errors.New("bad request") // todo
-		return
-	}
-	var (
-		codeChallenge       string
-		codeChallengeMethod string
-	)
-	if client.PKCE && responseType == "code" {
-		codeChallenge = r.Form.Get("code_challenge")
-		if codeChallenge == "" {
-			log.Println("code_challenge is missing")
-			err = errors.New("invalid_request") // todo
-			return
+
+		exists := false
+		for _, uri := range client.RedirectURIs {
+			if redirectURI == uri {
+				exists = true
+			}
 		}
-		codeChallengeMethod = r.Form.Get("code_challenge_method")
-		if codeChallengeMethod == "" {
-			log.Println("code_challenge_method is missing")
-			err = errors.New("invalid_request") // todo
-			return
+		if !exists {
+			http.Error(w, "redirect_uri is missing or invalid", http.StatusBadRequest)
+			log.Printf("400 redirect_uri is mismatched, cliend_id: %v redirect_uri: %v", clientID, redirectURI)
+			return nil
 		}
+	} else {
+		if len(client.RedirectURIs) != 1 {
+			http.Error(w, "redirect_uri is missing or invalid", http.StatusBadRequest)
+			log.Printf("400 redirect_uri is missing, client_id: %v", clientID)
+			return nil
+		}
+
+		// TODO(k15tfu): What does it mean?
+		//   [...], if only part of the redirection URI has been registered, or
+		//   [...], the client MUST include a redirection URI with the
+		//   authorization request using the "redirect_uri" request parameter
+		redirectURI = client.RedirectURIs[0]
 	}
-	reqID, err := uuid.NewRandom()
-	if err != nil {
-		log.Println("failed to generate random uuid for auth request, error:", err)
-		err = errors.New("bad request") // todo
-		return
+
+	//
+	// From this point, we have to send errors by redirecting to `redirectURI`:
+	//
+
+	allowedNames := []string{
+		// OAuth2.0 request parameters:
+		"response_type", "client_id", "redirect_uri", "scope", "state",
+		// PKCE request parameters:
+		"code_challenge", "code_challenge_method",
 	}
-	// todo: setup all parse fields
-	return storage.AuthRequest{
-		ID:                  reqID.String(),
-		ClientID:            clientID,
-		RedirectURI:         redirectURI,
-		State:               state,
-		ResponseType:        responseType,
-		CodeChallenge:       codeChallenge,
-		CodeChallengeMethod: codeChallengeMethod,
-	}, nil
+	params, ok := filterParameters(allowedNames, r.Form)
+	if !ok {
+		http.Redirect(w, r, ErrorURL(redirectURI, ErrInvalidRequest, "duplicate parameters found", params["state"]), http.StatusFound)
+		log.Printf("302 invalid_request duplicate parameters found, form: %v", r.Form)
+		return nil
+	}
+
+	// TODO(k15tfu): ?? require state
+
+	// OAuth2.0:
+	switch params["response_type"] {
+	case "code":
+		break
+	case "token":
+		http.Redirect(w, r, ErrorURL(redirectURI, ErrUnsupportedResponseType, "response_type not supported", params["state"]), http.StatusFound)
+		log.Printf("302 unsupported_response_type response_type not supported, response_type: %v", params["response_type"])
+		return nil
+	default:
+		http.Redirect(w, r, ErrorURL(redirectURI, ErrInvalidRequest, "response_type is missing or invalid", params["state"]), http.StatusFound)
+		log.Printf("302 invalid_request response_type is missing or invalid, form: %v", r.Form)
+		return nil
+	}
+
+	// PKCE:
+	if client.PKCE && params["response_type"] == "code" {
+		if _, ok := params["code_challenge"]; !ok {
+			http.Redirect(w, r, ErrorURL(redirectURI, ErrInvalidRequest, "code_challenge is missing", params["state"]), http.StatusFound)
+			log.Printf("302 invalid_request code_challenge is missing, form: %v", r.Form)
+			return nil
+		}
+		if _, ok := params["code_challenge_method"]; !ok {
+			http.Redirect(w, r, ErrorURL(redirectURI, ErrInvalidRequest, "code_challenge_method is missing", params["state"]), http.StatusFound)
+			log.Printf("302 invalid_request code_challenge_method is missing, form: %v", r.Form)
+			return nil
+		}
+	} else { // Otherwise, ignore these parameters.
+		delete(params, "code_challenge")
+		delete(params, "code_challenge_method")
+	}
+
+	// Set actual redirect_uri because it may be empty.
+	params["redirect_uri"] = redirectURI
+
+	return params
+
+	// TODO(k15tfu):
+	//   The redirection endpoint URI MUST be an absolute URI as defined by
+	//   [RFC3986] Section 4.3.  The endpoint URI MAY include an
+	//   "application/x-www-form-urlencoded" formatted (per Appendix B) query
+	//   component ([RFC3986] Section 3.4), which MUST be retained when adding
+	//   additional query parameters.  The endpoint URI MUST NOT include a
+	//   fragment component.
+
+	// TODO(k15tfu):
+	//   If an authorization request fails validation due to a missing,
+	//   invalid, or mismatching redirection URI, the authorization server
+	//   SHOULD inform the resource owner of the error and MUST NOT
+	//   automatically redirect the user-agent to the invalid redirection URI.
+	//redirectURI, err := url.Parse(r.Form.Get("redirect_uri"))
+	//if err != nil {
+	//	err = errors.New("bad request") // todo
+	//	return
+	//}
+	//if !redirectURI.IsAbs() || redirectURI.Fragment == "" {
+	//	err = errors.New("bad request") // todo
+	//	return
+	//}
 }
 
 // only authorization code grant flow for now
@@ -273,14 +373,53 @@ func (a *Auth) AuthorizationHandler() http.Handler {
 			http.Error(w, "Not Acceptable", http.StatusNotAcceptable)
 			return
 		}
-		authReq, err := a.parseAuthRequest(r)
+
+		// TODO(k15tfu):
+		//   The endpoint URI MAY include an "application/x-www-form-urlencoded"
+		//   formatted (per Appendix B) query component ([RFC3986] Section 3.4),
+		//   which MUST be retained when adding additional query parameters.  The
+		//   endpoint URI MUST NOT include a fragment component.
+
+		// TODO(k15tfu):
+		//   Since requests to the authorization endpoint result in user
+		//   authentication and the transmission of clear-text credentials (in the
+		//   HTTP response), the authorization server MUST require the use of TLS
+		//   as described in Section 1.6 when sending requests to the
+		//   authorization endpoint.
+
+		// TODO(k15tfu):
+		//   If TLS is not available, the authorization server
+		//   SHOULD warn the resource owner about the insecure endpoint prior to
+		//   redirection (e.g., display a message during the authorization
+		//   request).
+
+		params := a.validateAuthorizationRequest(w, r)
+		if params == nil {
+			return // error is already reported
+		}
+		redirectURI, state := params["redirect_uri"], params["state"]
+
+		reqID, err := uuid.NewRandom()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Redirect(w, r, ErrorURL(redirectURI, ErrServerError, "", state), http.StatusFound)
+			log.Printf("302 server_error uuid.NewRandom() failed, err: %v", err)
 			return
 		}
+
+		authReq := storage.AuthRequest{
+			ID:                  reqID.String(),
+			ClientID:            params["client_id"],
+			RedirectURI:         params["redirect_uri"],
+			State:               params["state"],
+			ResponseType:        params["response_type"],
+			CodeChallenge:       params["code_challenge"],
+			CodeChallengeMethod: params["code_challenge_method"],
+		}
+
 		err = a.Storage.AuthRequestCreate(authReq)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			http.Redirect(w, r, ErrorURL(redirectURI, ErrServerError, "", state), http.StatusFound)
+			log.Printf("302 server_error storage.Storage.AuthRequestCreate() failed, err: %v", err)
 			return
 		}
 		providersInfo := make([]view.ProviderInfo, 0, len(a.idProviders))
@@ -293,7 +432,9 @@ func (a *Auth) AuthorizationHandler() http.Handler {
 		}
 		err = v.Login(w, providersInfo)
 		if err != nil {
-			http.Error(w, "internal server error", http.StatusInternalServerError)
+			http.Redirect(w, r, ErrorURL(redirectURI, ErrServerError, "", state), http.StatusFound)
+			log.Printf("302 server_error view.View.Login() failed, err: %v", err)
+			return
 		}
 	})
 }
