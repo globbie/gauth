@@ -76,117 +76,6 @@ func (a *Auth) AddIdentityProvider(id string, provider provider.IdentityProvider
 	a.idProviders[id] = provider
 }
 
-func (a *Auth) TokenHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 4.1.3.  Access Token Request
-		// https://tools.ietf.org/html/rfc6749#section-4.1.3
-		clientID, clientSecret, ok := r.BasicAuth()
-		if !ok {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			log.Println("r.BasicAuth() failed")
-			return
-		}
-		var err error
-		if clientID, err = url.QueryUnescape(clientID); err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			log.Println("QueryUnescape(clientID) failed, err:", err)
-			return
-		}
-		if clientSecret, err = url.QueryUnescape(clientSecret); err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			log.Println("QueryUnescape(clientSecret) failed, err:", err)
-			return
-		}
-		client, ok := a.clients[clientID]
-		if !ok {
-			http.Error(w, "Not Found", http.StatusNotFound)
-			log.Printf("client not found: '%s'", clientID)
-			return
-		}
-
-		code := r.PostFormValue("code")
-
-		authCode, err := a.Storage.AuthCodeRead(code)
-		if err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			log.Println("failed to get auth code")
-			return
-		}
-
-		if client.PKCE {
-			codeVerifier := r.PostFormValue("code_verifier")
-			if codeVerifier == "" {
-				http.Error(w, "invalid_grant", http.StatusBadRequest) // todo
-				log.Println("missing code_verifier")
-				return
-			}
-			codeChallenge, err := NewCodeChallengeFromString(codeVerifier, authCode.CodeChallengeMethod)
-			if err == ErrUnsupportedTransformation {
-				http.Error(w, "invalid_grant", http.StatusBadRequest) // todo
-				log.Println("unknown code challenge method")
-				return
-			}
-			err = CompareVerifierAndChallenge(CodeVerifier(codeVerifier), codeChallenge)
-			if err != nil {
-				http.Error(w, "invalid_grant", http.StatusBadRequest) // todo
-				log.Println("invalid code verifier")
-				return
-			}
-		} else {
-			if client.Secret != clientSecret {
-				http.Error(w, "Bad Request", http.StatusBadRequest)
-				log.Printf("clientSecret mismatch: '%s' != '%s'", client.Secret, clientSecret)
-				return
-			}
-		}
-
-		grantType := r.PostFormValue("grant_type") // todo: add refresh token
-		if grantType != "authorization_code" {     // todo: fix hardcoded value
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			log.Println("grant_type is not set")
-			return
-		}
-
-		_ = r.PostFormValue("redirect_uri") // todo
-
-		err = a.Storage.AuthCodeDelete(code)
-		if err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			log.Println("failed to delete auth code")
-			return
-		}
-
-		// 4.1.4.  Access Token Response
-		// https://tools.ietf.org/html/rfc6749#section-4.1.4
-
-		jwt, err := CreateToken("hardcoded string", a.SignKey) // todo: fix hardcode
-		if err != nil {
-			log.Println("failed to create token", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		resp := struct {
-			AccessToken  string `json:"access_token"`
-			TokenType    string `json:"token_type"`
-			RefreshToken string `json:"refresh_token,omitempty"`
-			ExpiresIn    int    `json:"expires_in"`
-		}{
-			AccessToken:  jwt,
-			TokenType:    "Bearer",
-			RefreshToken: "",   // todo
-			ExpiresIn:    3600, // todo
-		}
-		data, err := json.Marshal(resp)
-		if err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-		w.Write(data)
-	})
-}
-
 func uniqueParameter(name string, form url.Values) (string, bool) {
 	vals, ok := form[name]
 	if ok && len(vals) == 1 {
@@ -436,6 +325,117 @@ func (a *Auth) AuthorizationHandler() http.Handler {
 			log.Printf("302 server_error view.View.Login() failed, err: %v", err)
 			return
 		}
+	})
+}
+
+func (a *Auth) TokenHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 4.1.3.  Access Token Request
+		// https://tools.ietf.org/html/rfc6749#section-4.1.3
+		clientID, clientSecret, ok := r.BasicAuth()
+		if !ok {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			log.Println("r.BasicAuth() failed")
+			return
+		}
+		var err error
+		if clientID, err = url.QueryUnescape(clientID); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			log.Println("QueryUnescape(clientID) failed, err:", err)
+			return
+		}
+		if clientSecret, err = url.QueryUnescape(clientSecret); err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			log.Println("QueryUnescape(clientSecret) failed, err:", err)
+			return
+		}
+		client, ok := a.clients[clientID]
+		if !ok {
+			http.Error(w, "Not Found", http.StatusNotFound)
+			log.Printf("client not found: '%s'", clientID)
+			return
+		}
+
+		code := r.PostFormValue("code")
+
+		authCode, err := a.Storage.AuthCodeRead(code)
+		if err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			log.Println("failed to get auth code")
+			return
+		}
+
+		if client.PKCE {
+			codeVerifier := r.PostFormValue("code_verifier")
+			if codeVerifier == "" {
+				http.Error(w, "invalid_grant", http.StatusBadRequest) // todo
+				log.Println("missing code_verifier")
+				return
+			}
+			codeChallenge, err := NewCodeChallengeFromString(codeVerifier, authCode.CodeChallengeMethod)
+			if err == ErrUnsupportedTransformation {
+				http.Error(w, "invalid_grant", http.StatusBadRequest) // todo
+				log.Println("unknown code challenge method")
+				return
+			}
+			err = CompareVerifierAndChallenge(CodeVerifier(codeVerifier), codeChallenge)
+			if err != nil {
+				http.Error(w, "invalid_grant", http.StatusBadRequest) // todo
+				log.Println("invalid code verifier")
+				return
+			}
+		} else {
+			if client.Secret != clientSecret {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				log.Printf("clientSecret mismatch: '%s' != '%s'", client.Secret, clientSecret)
+				return
+			}
+		}
+
+		grantType := r.PostFormValue("grant_type") // todo: add refresh token
+		if grantType != "authorization_code" {     // todo: fix hardcoded value
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			log.Println("grant_type is not set")
+			return
+		}
+
+		_ = r.PostFormValue("redirect_uri") // todo
+
+		err = a.Storage.AuthCodeDelete(code)
+		if err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			log.Println("failed to delete auth code")
+			return
+		}
+
+		// 4.1.4.  Access Token Response
+		// https://tools.ietf.org/html/rfc6749#section-4.1.4
+
+		jwt, err := CreateToken("hardcoded string", a.SignKey) // todo: fix hardcode
+		if err != nil {
+			log.Println("failed to create token", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		resp := struct {
+			AccessToken  string `json:"access_token"`
+			TokenType    string `json:"token_type"`
+			RefreshToken string `json:"refresh_token,omitempty"`
+			ExpiresIn    int    `json:"expires_in"`
+		}{
+			AccessToken:  jwt,
+			TokenType:    "Bearer",
+			RefreshToken: "",   // todo
+			ExpiresIn:    3600, // todo
+		}
+		data, err := json.Marshal(resp)
+		if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+		w.Write(data)
 	})
 }
 
