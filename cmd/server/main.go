@@ -92,8 +92,8 @@ func main() {
 	router := http.NewServeMux()
 	// todo: refactor handlers
 	router.Handle("/auth", Auth.AuthorizationHandler()) // oauth2 authorization endpoint
+	router.Handle("/token", Auth.TokenHandler())        // oauth2 token endpoint
 	router.Handle("/auth/", Auth)
-	router.Handle("/token", Auth.TokenHandler())                    // oauth2 token endpoint
 	router.Handle("/secret", Auth.ResourceHandler(secretHandler())) // oauth2 resource "server"
 
 	//router.Handle("/", staticView)
