@@ -1,6 +1,9 @@
 package auth
 
-import "net/url"
+import (
+	"encoding/json"
+	"net/url"
+)
 
 type Error struct {
 	StatusCode    int
@@ -35,4 +38,26 @@ func ErrorURL(source, code, desc, state string) string {
 	}
 	u.RawQuery = q.Encode()
 	return u.String()
+}
+
+const (
+	ErrTknInvalidRequest       = "invalid_request"
+	ErrTknInvalidClient        = "invalid_client"
+	ErrTknInvalidGrant         = "invalid_grant"
+	ErrTknUnauthorizedClient   = "unauthorized_client"
+	ErrTknUnsupportedGrantType = "unsupported_grant_type"
+	ErrTknInvalidScope         = "invalid_scope"
+)
+
+func ErrorContent(code, desc string) string {
+	e := struct {
+		Error            string `json:"error"`
+		ErrorDescription string `json:"error_description,omitempty"`
+		ErrorURI         string `json:"error_uri,omitempty"`
+	}{
+		Error:            code,
+		ErrorDescription: desc,
+	}
+	s, _ := json.Marshal(e)
+	return string(s)
 }
