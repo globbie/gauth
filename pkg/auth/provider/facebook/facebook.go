@@ -10,6 +10,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/facebook"
 	"io/ioutil"
+	"log"
 	"net/http"
 )
 
@@ -67,11 +68,11 @@ func (p *Provider) Register(w http.ResponseWriter, r *http.Request, authReq stor
 	p.Login(w, r, authReq)
 }
 
-func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) error {
+func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) (provider.UserIdentity, error) {
 	code := r.FormValue("code")
 	token, err := p.oauthConfig.Exchange(context.TODO(), code)
 	if err != nil {
-		return auth.Error{
+		return provider.UserIdentity{}, auth.Error{
 			StatusCode:    http.StatusBadRequest,
 			Message:       fmt.Sprint("oauth exchange failed:", err.Error()),
 			PublicMessage: "Bad Request",
@@ -80,40 +81,27 @@ func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq stor
 	client := p.oauthConfig.Client(context.TODO(), token)
 	resp, err := client.Get(userInfoURL)
 	if err != nil {
-		return auth.Error{
+		return provider.UserIdentity{}, auth.Error{
 			StatusCode:    http.StatusInternalServerError,
 			Message:       fmt.Sprint("failed to get google user info:", err.Error()),
 			PublicMessage: "Internal Server Error",
 		}
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err = resp.Body.Close()
+		if err != nil {
+			log.Print("failed to close response body:", err)
+		}
+	}()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	userInfo := UserInfo{}
 	err = json.Unmarshal(body, &userInfo)
 
-	creds, err := p.storage.UserRead(p.id, userInfo.Email)
-	if err != nil && err != storage.ErrNotFound {
-		return auth.Error{
-			StatusCode:    http.StatusInternalServerError,
-			Message:       fmt.Sprint("failed to get user from storage:", err.Error()),
-			PublicMessage: "Internal Error",
-		}
-	}
-	if err == storage.ErrNotFound {
-		creds = Credentials{
-			Email: userInfo.Email,
-		}
-		err = p.storage.UserCreate(p.id, creds)
-		if err != nil {
-			return auth.Error{
-				StatusCode:    http.StatusInternalServerError,
-				Message:       fmt.Sprint("could not create user:", err.Error()),
-				PublicMessage: "Internal Error",
-			}
-		}
-	}
-	return nil
+	return provider.UserIdentity{
+		Email: userInfo.Email,
+		UserID: userInfo.ID,
+	}, nil
 }
 
 type UserInfo struct {
@@ -127,12 +115,4 @@ type UserInfo struct {
 	Gender     string `json:"gender"`
 	Locale     string `json:"locale"`
 	Verified   bool   `json:"verified"`
-}
-
-type Credentials struct {
-	Email string `json:"email"`
-}
-
-func (c Credentials) UID() string {
-	return c.Email
 }

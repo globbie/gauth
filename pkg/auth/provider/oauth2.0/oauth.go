@@ -57,11 +57,11 @@ func (p *Provider) Register(w http.ResponseWriter, r *http.Request, authReq stor
 	p.Login(w, r, authReq)
 }
 
-func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) error {
+func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) (provider.UserIdentity, error) {
 	code := r.FormValue("code")
 	token, err := p.oauthConfig.Exchange(context.TODO(), code)
 	if err != nil {
-		return auth.Error{
+		return provider.UserIdentity{}, auth.Error{
 			StatusCode:    http.StatusBadRequest,
 			Message:       fmt.Sprint("oauth exchange failed:", err.Error()),
 			PublicMessage: "Bad Request",
@@ -70,5 +70,5 @@ func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq stor
 
 	_ = token
 	// provider specific user read/create functions
-	return nil
+	return provider.UserIdentity{}, nil
 }

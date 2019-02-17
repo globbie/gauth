@@ -28,6 +28,7 @@ type Storage interface {
 
 	AuthRequestCreate(a AuthRequest) error
 	AuthRequestRead(uid string) (AuthRequest, error)
+	AuthRequestUpdate(uid string, updater func(a AuthRequest) (AuthRequest, error)) error
 	AuthRequestDelete(uid string) error
 
 	AuthCodeCreate(a AuthCode) error
@@ -39,7 +40,7 @@ type Credentials interface {
 	UID() string
 }
 
-// todo(n.rodionov): move this struct to auth module
+// todo(n.rodionov): make similar struct in auth module
 type AuthRequest struct {
 	ID           string
 	ClientID     string
@@ -52,6 +53,8 @@ type AuthRequest struct {
 	CodeChallengeMethod string
 
 	//expiry time.Time todo
+
+	Claims Claims
 }
 
 type AuthCode struct {
@@ -61,5 +64,12 @@ type AuthCode struct {
 	CodeChallenge       string
 	CodeChallengeMethod string
 
-	//Expiry time.Time
+	//ProviderID string // todo(n.rodionov)
+	//Expiry time.Time  // todo(n.rodionov)
+	Claims Claims
+}
+
+type Claims struct {
+	UserID    string
+	UserEmail string
 }

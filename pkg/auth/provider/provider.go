@@ -21,7 +21,7 @@ type IdentityProvider interface {
 	Login(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
 	Register(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
 	Logout(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
-	Callback(w http.ResponseWriter, r *http.Request, request storage.AuthRequest) error
+	Callback(w http.ResponseWriter, r *http.Request, request storage.AuthRequest) (UserIdentity, error)
 }
 
 type Provider interface{}
@@ -33,4 +33,11 @@ type OAuthProvider interface {
 
 type PasswordProvider interface {
 	Login(w http.ResponseWriter, r *http.Request, request storage.AuthRequest)
+}
+
+type UserIdentity struct {
+	UserID string
+	Email  string
+
+	ProviderID string
 }

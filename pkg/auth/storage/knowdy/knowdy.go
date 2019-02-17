@@ -44,6 +44,9 @@ func (s *KnowdyStorage) AuthRequestRead(uid string) (storage.AuthRequest, error)
 	return storage.AuthRequest{}, errors.New("not implemented")
 }
 
+func (s *KnowdyStorage) AuthRequestUpdate(uid string, updater func (a storage.AuthRequest) (storage.AuthRequest, error)) error {
+	return errors.New("not implemented")
+}
 func (s *KnowdyStorage) AuthRequestDelete(uid string) error {
 	return errors.New("not implemented")
 }

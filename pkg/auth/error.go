@@ -23,6 +23,7 @@ const (
 	ErrInvalidScope            = "invalid_scope"
 	ErrServerError             = "server_error"
 	ErrTemporarilyUnavailable  = "temporarily_unavailable"
+	ErrInternalServerError      = "internal_error"
 )
 
 func ErrorURL(source, code, desc, state string) string {

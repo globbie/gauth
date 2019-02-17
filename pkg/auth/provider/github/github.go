@@ -10,7 +10,6 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 	"net/http"
-	"strconv"
 )
 
 const ProviderType = "github"
@@ -61,11 +60,11 @@ func (p *Provider) Register(w http.ResponseWriter, r *http.Request, authReq stor
 	p.Login(w, r, authReq)
 }
 
-func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) error {
+func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) (provider.UserIdentity, error) {
 	code := r.FormValue("code")
 	token, err := p.oauthConfig.Exchange(context.TODO(), code)
 	if err != nil {
-		return auth.Error{
+		return provider.UserIdentity{}, auth.Error{
 			StatusCode:    http.StatusBadRequest,
 			Message:       fmt.Sprint("oauth exchange failed:", err.Error()),
 			PublicMessage: "Bad Request",
@@ -75,42 +74,14 @@ func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq stor
 	githubClient := goGithub.NewClient(client)
 	user, _, err := githubClient.Users.Get(context.TODO(), "")
 	if err != nil {
-		return auth.Error{
+		return provider.UserIdentity{}, auth.Error{
 			StatusCode:    http.StatusBadRequest,
 			Message:       fmt.Sprint("oauth exchange failed:", err.Error()),
 			PublicMessage: "Bad Request",
 		}
 	}
-	creds, err := p.storage.UserRead(p.id, strconv.FormatInt(*user.ID, 10))
-	if err != nil && err != storage.ErrNotFound {
-		return auth.Error{
-			StatusCode:    http.StatusInternalServerError,
-			Message:       fmt.Sprint("failed to get user from storage:", err.Error()),
-			PublicMessage: "Internal Error",
-		}
-	}
-	if err == storage.ErrNotFound {
-		creds = Credentials{
-			ID:    strconv.FormatInt(*user.ID, 10),
-			Email: *user.Email,
-		}
-		err = p.storage.UserCreate(p.id, creds)
-		if err != nil {
-			return auth.Error{
-				StatusCode:    http.StatusInternalServerError,
-				Message:       fmt.Sprint("could not create user:", err.Error()),
-				PublicMessage: "Internal Error",
-			}
-		}
-	}
-	return nil
+	return provider.UserIdentity{
+		Email: *user.Email,
+	}, nil
 }
 
-type Credentials struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-}
-
-func (c Credentials) UID() string {
-	return c.ID
-}
