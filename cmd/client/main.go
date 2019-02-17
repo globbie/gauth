@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"html/template"
@@ -175,5 +176,6 @@ func authCallbackHandler(config oauth2.Config) http.Handler {
 			return
 		}
 		log.Println("got token:", token)
+		_, _ = fmt.Fprintf(w, "%s", token.AccessToken)
 	})
 }

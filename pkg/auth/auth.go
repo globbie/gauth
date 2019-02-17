@@ -408,7 +408,7 @@ func (a *Auth) validateAccessTokenRequest(w http.ResponseWriter, r *http.Request
 		if !client.PKCE && subtle.ConstantTimeCompare([]byte(client.Secret), []byte(clientSecret)) != 1 {
 			w.Header().Set("WWW-Authenticate", "Basic")
 			http.Error(w, ErrorContent(ErrTknInvalidClient, "auth is missing or invalid"), http.StatusUnauthorized)
-			log.Printf("401 invalid_client client_secret is mismatched, client_id: %v", clientID)
+			log.Printf("401 invalid_client client_secret is mismatched, clientID: %v", clientID)
 			return nil
 		}
 
@@ -430,21 +430,20 @@ func (a *Auth) validateAccessTokenRequest(w http.ResponseWriter, r *http.Request
 			return nil
 		}
 
-		redirect_uri := params["redirect_uri"]
+		_ = params["redirect_uri"]
 		// TODO(k15tfu):
 		//   redirect_uri
 		//         REQUIRED, if the "redirect_uri" parameter was included in the
 		//         authorization request as described in Section 4.1.1, and their
 		//         values MUST be identical.
-		_ = redirect_uri
 
-		client_id := params["client_id"]
-		if client_id == "" {
-			// client_id is required only if for unauthenticated client (See 3.2.1.)
-		} else if client_id != client.ID {
+		clientID := params["clientID"]
+		if clientID == "" {
+			// clientID is required only if for unauthenticated client (See 3.2.1.)
+		} else if clientID != client.ID {
 			// TODO(k15tfu): ?? invalid_grant or invalid_client or invalid_request
-			http.Error(w, ErrorContent(ErrTknInvalidGrant, "client_id is missing or invalid"), http.StatusBadRequest)
-			log.Printf("400 invalid_grant client_id is mismatched, client_id: %v client.ID: %v", client_id, client.ID)
+			http.Error(w, ErrorContent(ErrTknInvalidGrant, "clientID is missing or invalid"), http.StatusBadRequest)
+			log.Printf("400 invalid_grant clientID is mismatched, clientID: %v client.ID: %v", clientID, client.ID)
 			return nil
 		}
 
@@ -465,19 +464,20 @@ func (a *Auth) validateAccessTokenRequest(w http.ResponseWriter, r *http.Request
 			err = CompareVerifierAndChallenge(CodeVerifier(codeVerifier), codeChallenge)
 			if err != nil {
 				http.Error(w, ErrorContent(ErrTknInvalidGrant, "code_verifier is missing or invalid"), http.StatusBadRequest)
-				log.Printf("400 invalid_grant code_verifier is mismatched, client_id: %v", clientID)
+				log.Printf("400 invalid_grant code_verifier is mismatched, clientID: %v", clientID)
 				return nil
 			}
 		} else { // Otherwise, ignore these parameters.
 			delete(params, "code_verifier")
 		}
 
-		err = a.Storage.AuthCodeDelete(code)
-		if err != nil {
-			http.Error(w, "500 auth code delete error", http.StatusInternalServerError)
-			log.Printf("500 storage.Storage.AuthCodeDelete() failed, err: %v", err)
-			return nil
-		}
+		// todo(n.rodionov): validation should not access databases and change state
+		//err = a.Storage.AuthCodeDelete(code)
+		//if err != nil {
+		//	http.Error(w, "500 auth code delete error", http.StatusInternalServerError)
+		//	log.Printf("500 storage.Storage.AuthCodeDelete() failed, err: %v", err)
+		//	return nil
+		//}
 	}
 
 	return params
@@ -507,9 +507,19 @@ func (a *Auth) TokenHandler() http.Handler {
 			return // error is already reported
 		}
 
+		// code already validated.
+		code, _ := params["code"]
+		authCode, err := a.Storage.AuthCodeRead(code)
+		if err != nil {
+			http.Error(w, ErrorContent(ErrInternalServerError, "internal server error"), http.StatusInternalServerError)
+			log.Printf("could not access auth code storage")
+			return
+		}
+		// todo(n.rodionov): delete auth code
+
 		// 4.1.4.  Access Token Response
 		// https://tools.ietf.org/html/rfc6749#section-4.1.4
-		jwt, err := CreateToken("hardcoded string", a.SignKey) // todo: fix hardcode
+		token, err := CreateToken(authCode.Claims, a.SignKey)
 		if err != nil {
 			http.Error(w, "500 create token error", http.StatusInternalServerError)
 			log.Printf("500 auth.CreateToken() failed, err: %v", err)
@@ -522,7 +532,7 @@ func (a *Auth) TokenHandler() http.Handler {
 			RefreshToken string `json:"refresh_token,omitempty"`
 			ExpiresIn    int    `json:"expires_in"`
 		}{
-			AccessToken:  jwt,
+			AccessToken:  token,
 			TokenType:    "Bearer",
 			RefreshToken: "",   // todo
 			ExpiresIn:    3600, // todo

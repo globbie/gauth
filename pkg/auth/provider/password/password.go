@@ -132,8 +132,8 @@ func (p *Provider) Register(w http.ResponseWriter, r *http.Request, authReq stor
 	w.Write(response)
 }
 
-func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) error {
-	return nil
+func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq storage.AuthRequest) (provider.UserIdentity, error) {
+	return provider.UserIdentity{}, nil
 }
 
 type Credentials struct {

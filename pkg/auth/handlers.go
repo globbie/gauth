@@ -34,14 +34,19 @@ func (a *Auth) CallbackHandler(w http.ResponseWriter, r *http.Request, p provide
 		http.NotFound(w, r)
 		return
 	}
-
-	err = p.Callback(w, r, authReq)
+	identity, err := p.Callback(w, r, authReq)
 	if err != nil {
-		aErr := err.(*Error)
+		aErr := err.(*Error) // todo(n.rodionov): fix
 		log.Printf("CallbackHandler[%v] failed: %v", p.Type(), aErr.Message)
 		http.Error(w, aErr.PublicMessage, aErr.StatusCode)
 		return
 	}
+
+	err = a.Storage.AuthRequestUpdate(authReq.ID, func(a storage.AuthRequest) (request storage.AuthRequest, e error) {
+		a.Claims.UserEmail = identity.Email
+		a.Claims.UserID = identity.UserID
+		return a, nil
+	})
 
 	u, err := url.Parse(authReq.RedirectURI)
 	if err != nil {
@@ -54,11 +59,13 @@ func (a *Auth) CallbackHandler(w http.ResponseWriter, r *http.Request, p provide
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+
 	authCode := storage.AuthCode{
 		ID:                  authCodeUUID.String(),
 		ClientID:            authReq.ClientID,
 		CodeChallenge:       authReq.CodeChallenge,
 		CodeChallengeMethod: authReq.CodeChallengeMethod,
+		Claims:              authReq.Claims,
 	}
 	err = a.Storage.AuthCodeCreate(authCode)
 	if err != nil {
@@ -67,7 +74,7 @@ func (a *Auth) CallbackHandler(w http.ResponseWriter, r *http.Request, p provide
 	}
 
 	q := u.Query()
-	q.Set("code", authCode.ID) // todo: generate and store authorization code
+	q.Set("code", authCode.ID)
 	q.Set("state", authReq.State)
 	u.RawQuery = q.Encode()
 
