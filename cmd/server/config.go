@@ -3,7 +3,9 @@ package main
 import (
 	"encoding/json"
 	"github.com/globbie/gauth/cmd/server/view"
+	"github.com/globbie/gauth/pkg/auth"
 	"github.com/globbie/gauth/pkg/auth/provider/vkontakte"
+	"github.com/globbie/gauth/pkg/repositories/in-memory"
 	"log"
 
 	"github.com/globbie/gauth/pkg/auth/provider"
@@ -20,14 +22,17 @@ import (
 	jsonView "github.com/globbie/gauth/pkg/auth/view/json"
 )
 
+// todo(n.rodionov): move all *Config interfaces into auth module
+
 type Config struct {
-	Web       Web        `json:"web"`
-	Token     Token      `json:"token"`
-	Storage   Storage    `json:"storage"`
-	Providers []Provider `json:"providers"`
-	Frontend  Frontend   `json:"frontend"`
-	Clients   []Client   `json:"clients"`
-	Views     []View     `json:"views"`
+	Web        Web        `json:"web"`
+	Token      Token      `json:"token"`
+	Storage    Storage    `json:"storage"`
+	Repository Repository `json:"repositories"`
+	Providers  []Provider `json:"providers"`
+	Frontend   Frontend   `json:"frontend"`
+	Clients    []Client   `json:"clients"`
+	Views      []View     `json:"views"`
 }
 
 type Web struct {
@@ -48,6 +53,46 @@ type Client struct {
 	Secret       string   `json:"client-secret"`
 	RedirectURIs []string `json:"redirect-uris"`
 	PKCE         bool     `json:"pkce"`
+}
+
+type Repository struct {
+	RefreshToken RefreshTokenRepository `json:"refresh-token"`
+}
+
+type RefreshTokenRepository struct {
+	Type string `json:"entity"`
+	Config auth.RefreshTokenRepositoryConfig `json:"config"`
+}
+
+var refreshTokenRepositoryConfigs = map[string]func() auth.RefreshTokenRepositoryConfig{
+	"in-memory": func() auth.RefreshTokenRepositoryConfig { return new(in_memory.Config)},
+}
+
+func (r *RefreshTokenRepository) UnmarshalJSON(b []byte) error {
+	var data struct {
+		Type   string          `json:"type"`
+		Config json.RawMessage `json:"config"`
+	}
+	if err := json.Unmarshal(b, &data); err != nil {
+		log.Fatalln("parse storage:", err)
+	}
+	f, ok := refreshTokenRepositoryConfigs[data.Type]
+	if !ok {
+		log.Fatalf("%v repository in not registered", data.Type)
+	}
+	config := f()
+	if len(data.Config) != 0 {
+		configData := []byte(string(data.Config))
+		err := json.Unmarshal(configData, &config)
+		if err != nil {
+			log.Fatalf("failed to parse %v repository config, error: %v", data.Type, err)
+		}
+	}
+	*r = RefreshTokenRepository{
+		Type:   data.Type,
+		Config: config,
+	}
+	return nil
 }
 
 type Storage struct {

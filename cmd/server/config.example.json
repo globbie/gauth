@@ -9,10 +9,20 @@
   "storage": {
     "type": "in-memory"
   },
+  "repository": {
+    "refresh-token": {
+      "type": "in-memory",
+      "config": null
+    },
+    "users": {
+      "type": "in-memory"
+    }
+  },
   "providers": [
     {
       "type": "github",
-      "name": "github",
+      "name": "Github",
+      "id": "github",
       "config": {
         "client-id": "<client-id>",
         "client-secret": "<client-secret>"
@@ -20,7 +30,8 @@
     },
     {
       "type": "password",
-      "name": "password",
+      "name": "Password",
+      "id": "password",
       "config": {
         "encryption-scheme": {
           "name": "bcrypt",

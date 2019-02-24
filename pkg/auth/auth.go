@@ -27,6 +27,10 @@ type Client struct {
 	PKCE         bool
 }
 
+type Config struct {
+	RefreshTokenRepositoryConfig
+}
+
 type Auth struct {
 	URLPrefix string
 
@@ -37,11 +41,18 @@ type Auth struct {
 	SignKey   *rsa.PrivateKey
 
 	Storage    storage.Storage
+
+	RefreshTokenRepository
+
 	ViewRouter view.Router
 }
 
-// todo: delete this factory
-func New(verifyKey *rsa.PublicKey, signKey *rsa.PrivateKey, storage storage.Storage, vr view.Router) *Auth {
+// todo(n.rodionov): move parameters into config
+func New(verifyKey *rsa.PublicKey, signKey *rsa.PrivateKey, storage storage.Storage, vr view.Router, c Config) (*Auth, error) {
+	refreshTokenRepository, err := c.RefreshTokenRepositoryConfig.New()
+	if err != nil {
+		return nil, err
+	}
 	auth := &Auth{
 		idProviders: make(map[string]provider.IdentityProvider),
 		clients:     make(map[string]*Client),
@@ -49,8 +60,9 @@ func New(verifyKey *rsa.PublicKey, signKey *rsa.PrivateKey, storage storage.Stor
 		SignKey:     signKey,
 		Storage:     storage,
 		ViewRouter:  vr,
+		RefreshTokenRepository: refreshTokenRepository,
 	}
-	return auth
+	return auth, nil
 }
 
 func (a *Auth) AddClient(client Client) {
