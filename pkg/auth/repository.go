@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"math/rand"
 	"time"
 )
 
@@ -11,18 +12,30 @@ var (
 	ErrNotImplemented = errors.New("not implemented")
 )
 
+func NewRandomID() string {
+	const (
+		alphabet = "abcdefghijklmnopqrstuvwxuzABCDEFGHIGKLMNOPQRSTUVWXYZ0123456789"
+		idLen    = 22
+	)
+
+	randSource := rand.NewSource(time.Now().UnixNano())
+	buff := make([]byte, idLen)
+	for i := range buff {
+		buff[i] = alphabet[randSource.Int63()%int64(len(alphabet))]
+	}
+	return string(buff)
+}
+
 type Repository interface {
 }
 
 type RefreshToken struct {
-	ID string `json:"id"`
-
 	Token string `json:"token"`
 
 	CreatedAt time.Time `json:"created-at"`
 
-	ClientID   string `json:"client-id"`
-	ProviderID string `json:"provider-id"`
+	ClientID string `json:"client-id"`
+	//ProviderID string `json:"provider-id"` // todo(n.rodionov)
 }
 
 type RefreshTokenRepository interface {
@@ -35,4 +48,3 @@ type RefreshTokenRepository interface {
 type RefreshTokenRepositoryConfig interface {
 	New() (RefreshTokenRepository, error)
 }
-

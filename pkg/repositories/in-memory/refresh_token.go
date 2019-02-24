@@ -9,11 +9,11 @@ type RefreshTokenRepository struct {
 }
 
 func (r *RefreshTokenRepository) Create(token auth.RefreshToken) error {
-	_, ok := r.tokens[token.ID]
+	_, ok := r.tokens[token.Token]
 	if ok {
 		return auth.ErrAlreadyExists
 	}
-	r.tokens[token.ID] = token
+	r.tokens[token.Token] = token
 	return nil
 }
 

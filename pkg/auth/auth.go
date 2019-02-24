@@ -7,17 +7,15 @@ import (
 	"errors"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
-	"github.com/golang/gddo/httputil/header"
-
 	"github.com/globbie/gauth/pkg/auth/provider"
 	"github.com/globbie/gauth/pkg/auth/storage"
 	"github.com/globbie/gauth/pkg/auth/view"
-
+	"github.com/golang/gddo/httputil/header"
 	"github.com/google/uuid"
 	"log"
 	"net/http"
 	"net/url"
-	"strconv"
+	"time"
 )
 
 type Client struct {
@@ -40,7 +38,7 @@ type Auth struct {
 	VerifyKey *rsa.PublicKey
 	SignKey   *rsa.PrivateKey
 
-	Storage    storage.Storage
+	Storage storage.Storage
 
 	RefreshTokenRepository
 
@@ -54,12 +52,12 @@ func New(verifyKey *rsa.PublicKey, signKey *rsa.PrivateKey, storage storage.Stor
 		return nil, err
 	}
 	auth := &Auth{
-		idProviders: make(map[string]provider.IdentityProvider),
-		clients:     make(map[string]*Client),
-		VerifyKey:   verifyKey,
-		SignKey:     signKey,
-		Storage:     storage,
-		ViewRouter:  vr,
+		idProviders:            make(map[string]provider.IdentityProvider),
+		clients:                make(map[string]*Client),
+		VerifyKey:              verifyKey,
+		SignKey:                signKey,
+		Storage:                storage,
+		ViewRouter:             vr,
 		RefreshTokenRepository: refreshTokenRepository,
 	}
 	return auth, nil
@@ -341,30 +339,79 @@ func (a *Auth) AuthorizationHandler() http.Handler {
 	})
 }
 
-func (a *Auth) validateAccessTokenRequest(w http.ResponseWriter, r *http.Request) map[string]string {
-	// TODO(k15tfu):
-	//   The parameters are included in the entity-body of the HTTP response
-	//   using the "application/json" media type as defined by [RFC4627].
+// todo(n.rodionov): break this structure on to code -> token & refresh token -> token request structures
+type AccessTokenRequestParams struct {
+	// OAuth2.0 request parameters
+	GrantType   string
 
-	// TODO(k15tfu):
-	//   The client MUST NOT use more than one authentication method in each
-	//   request.
+	// access token request parameters
+	AuthCodeID  string
+	RedirectURI string
+	ClientID    string
 
-	// TODO(k15tfu):
-	//   Alternatively, the authorization server MAY support including the
-	//   client credentials in the request-body using the following
-	//   parameters: client_id, client_secret
+	// refreshing access token parameters
+	RefreshToken string
+	Scope        string // not implemented
 
-	if r.Method != "POST" {
-		http.Error(w, ErrorContent(ErrTknInvalidRequest, "method not allowed"), http.StatusBadRequest)
-		log.Printf("400 invalid_request method not allowed, method: %v", r.Method)
-		return nil
+	// PKCE request parameters
+	CodeVerifier string
+}
+
+func accessTokenRequestParamsNew(form url.Values) (result AccessTokenRequestParams, err error) {
+	// todo(n.rodionov): may be reflection could help to avoid repeated checks
+	if values, ok := form["grant_type"]; ok {
+		if len(values) != 1 {
+			return result, errors.New("'grant_type' parameter is included more than once")
+		}
+		result.GrantType = values[0]
 	}
+	if values, ok := form["code"]; ok {
+		if len(values) != 1 {
+			err = errors.New("'code' parameter is included more than once")
+			return
+		}
+		result.AuthCodeID = values[0]
+	}
+	if values, ok := form["redirect_uri"]; ok {
+		if len(values) != 1 {
+			err = errors.New("'redirect_uri' parameter is included more than once")
+			return
+		}
+		result.RedirectURI = values[0]
+	}
+	if values, ok := form["client_id"]; ok {
+		if len(values) != 1 {
+			err = errors.New("'client_id' parameter is included more than once")
+			return
+		}
+		result.ClientID = values[0]
+	}
+	if values, ok := form["code_verifier"]; ok {
+		if len(values) != 1 {
+			err = errors.New("'code_verifier' parameter is included more than once")
+			return
+		}
+		result.CodeVerifier = values[0]
+	}
+	if values, ok := form["refresh_token"]; ok {
+		if len(values) != 1 {
+			err = errors.New("'refresh_token' parameter is included more than once")
+			return
+		}
+		result.RefreshToken = values[0]
+	}
+	return
+}
+
+func (a *Auth) clientAuthenticate(w http.ResponseWriter, r *http.Request, params AccessTokenRequestParams) (storage.AuthCode, error) {
+	var (
+		authCode storage.AuthCode
+		err      error
+	)
 
 	clientID, clientSecret, ok := r.BasicAuth()
 	clientID, _ = url.QueryUnescape(clientID)
 	if clientSecret != "" { // client_secret can be an empty string
-		var err error
 		if clientSecret, err = url.QueryUnescape(clientSecret); err != nil {
 			ok = false
 		}
@@ -373,193 +420,193 @@ func (a *Auth) validateAccessTokenRequest(w http.ResponseWriter, r *http.Request
 		w.Header().Set("WWW-Authenticate", "Basic")
 		http.Error(w, ErrorContent(ErrTknInvalidClient, "auth is missing or invalid"), http.StatusUnauthorized)
 		log.Printf("401 invalid_client Authorization is missing or invalid, auth: %v", r.Header.Get("Authorization"))
-		return nil
+		return authCode, errors.New("authentication failed")
 	}
-	client := a.clients[clientID]
-	if client == nil {
+	client, ok := a.clients[clientID]
+	if !ok {
 		w.Header().Set("WWW-Authenticate", "Basic")
 		http.Error(w, ErrorContent(ErrTknInvalidClient, "auth is missing or invalid"), http.StatusUnauthorized)
 		log.Printf("401 invalid_client client_id not registered, client_id: %v", clientID)
-		return nil
+		return authCode, errors.New("authentication failed")
 	}
-
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, ErrorContent(ErrTknInvalidRequest, "non-parsable request"), http.StatusBadRequest)
 		log.Printf("400 invalid_request http.Request.ParseForm() failed, err: %v", err)
-		return nil
+		return authCode, errors.New("authentication failed")
 	}
 
-	allowedNames := []string{
-		// OAuth2.0 request parameters:
-		"grant_type", "code", "redirect_uri", "client_id",
-		// PKCE request parameters:
-		"code_verifier",
-	}
-	params, ok := filterParameters(allowedNames, r.PostForm)
-	if !ok {
-		http.Error(w, ErrorContent(ErrTknInvalidRequest, "duplicate parameters found"), http.StatusBadRequest)
-		log.Printf("400 invalid_request duplicate parameters found, form: %v", r.PostForm)
-		return nil
+	if !client.PKCE && subtle.ConstantTimeCompare([]byte(client.Secret), []byte(clientSecret)) != 1 {
+		w.Header().Set("WWW-Authenticate", "Basic")
+		http.Error(w, ErrorContent(ErrTknInvalidClient, "auth is missing or invalid"), http.StatusUnauthorized)
+		log.Printf("401 invalid_client client_secret is mismatched, clientID: %v", clientID)
+		return authCode, errors.New("authentication failed")
 	}
 
-	// OAuth2.0:
-	switch params["grant_type"] {
-	case "authorization_code":
-		break
-	case "password", "client_credentials":
-		http.Error(w, ErrorContent(ErrTknUnsupportedGrantType, "grant_type not supported"), http.StatusBadRequest)
-		log.Printf("400 invalid_request grant_type not supported, grant_type: %v", params["grant_type"])
-		return nil
-	default:
-		http.Error(w, ErrorContent(ErrTknInvalidRequest, "grant_type is missing or invalid"), http.StatusBadRequest)
-		log.Printf("400 invalid_request grant_type is missing or invalid, form: %v", r.PostForm)
-		return nil
+	authCode, err = a.Storage.AuthCodeRead(params.AuthCodeID)
+	if err != nil {
+		http.Error(w, ErrorContent(ErrTknInvalidGrant, "code is missing or invalid"), http.StatusBadRequest)
+		log.Printf("400 invalid_grant storage.Storage.AuthCodeRead() failed, err: %v", err)
+		return authCode, err
+	}
+	if authCode.ClientID != client.ID {
+		http.Error(w, ErrorContent(ErrTknInvalidGrant, "code is missing or invalid"), http.StatusBadRequest)
+		log.Printf("400 invalid_grant authCode.ClientID is mismatched, authCode.ClientID: %v client.ID: %v", authCode.ClientID, client.ID)
+		return authCode, errors.New("authentication failed")
 	}
 
-	if params["grant_type"] == "authorization_code" {
-		if !client.PKCE && subtle.ConstantTimeCompare([]byte(client.Secret), []byte(clientSecret)) != 1 {
-			w.Header().Set("WWW-Authenticate", "Basic")
-			http.Error(w, ErrorContent(ErrTknInvalidClient, "auth is missing or invalid"), http.StatusUnauthorized)
-			log.Printf("401 invalid_client client_secret is mismatched, clientID: %v", clientID)
-			return nil
+	if params.ClientID == "" {
+		// clientID is required only if for unauthenticated client (See 3.2.1.)
+	} else if params.ClientID != client.ID {
+		// TODO(k15tfu): ?? invalid_grant or invalid_client or invalid_request
+		http.Error(w, ErrorContent(ErrTknInvalidGrant, "clientID is missing or invalid"), http.StatusBadRequest)
+		log.Printf("400 invalid_grant clientID is mismatched, clientID: %v client.ID: %v", params.ClientID, client.ID)
+		return authCode, errors.New("authentication failed")
+	}
+
+	if client.PKCE {
+		codeVerifier := params.CodeVerifier
+		if codeVerifier == "" {
+			http.Error(w, ErrorContent(ErrTknInvalidGrant, "code_verifier is missing or invalid"), http.StatusBadRequest) // FIXME(k15tfu): ?? invalid_grant or invalid_request
+			log.Printf("400 invalid_grant code_verifier is missing or invalid, form: %v", r.PostForm)
+			return authCode, errors.New("authentication failed")
 		}
-
-		code := params["code"]
-		if code == "" {
-			http.Error(w, ErrorContent(ErrTknInvalidRequest, "code is missing or invalid"), http.StatusBadRequest)
-			log.Printf("400 invalid_request code is missing or invalid, form: %v", r.PostForm)
-			return nil
+		codeChallenge, err := NewCodeChallengeFromString(codeVerifier, authCode.CodeChallengeMethod)
+		if err == ErrUnsupportedTransformation {
+			http.Error(w, ErrorContent(ErrTknInvalidGrant, "code_challenge_method not supported"), http.StatusBadRequest)
+			log.Printf("400 invalid_grant code_challenge_method not supported, code_challenge_method: %v", authCode.CodeChallengeMethod)
+			return authCode, errors.New("authentication failed")
 		}
-		authCode, err := a.Storage.AuthCodeRead(code) // FIXME(k15tfu): ?? subtle.ConstantTimeCompare if client.PKCE
+		err = CompareVerifierAndChallenge(CodeVerifier(codeVerifier), codeChallenge)
 		if err != nil {
-			http.Error(w, ErrorContent(ErrTknInvalidGrant, "code is missing or invalid"), http.StatusBadRequest)
-			log.Printf("400 invalid_grant storage.Storage.AuthCodeRead() failed, err: %v", err)
-			return nil
+			http.Error(w, ErrorContent(ErrTknInvalidGrant, "code_verifier is missing or invalid"), http.StatusBadRequest)
+			log.Printf("400 invalid_grant code_verifier is mismatched, clientID: %v", clientID)
+			return authCode, errors.New("authentication failed")
 		}
-		if authCode.ClientID != client.ID {
-			http.Error(w, ErrorContent(ErrTknInvalidGrant, "code is missing or invalid"), http.StatusBadRequest)
-			log.Printf("400 invalid_grant authCode.ClientID is mismatched, authCode.ClientID: %v client.ID: %v", authCode.ClientID, client.ID)
-			return nil
-		}
-
-		_ = params["redirect_uri"]
-		// TODO(k15tfu):
-		//   redirect_uri
-		//         REQUIRED, if the "redirect_uri" parameter was included in the
-		//         authorization request as described in Section 4.1.1, and their
-		//         values MUST be identical.
-
-		clientID := params["clientID"]
-		if clientID == "" {
-			// clientID is required only if for unauthenticated client (See 3.2.1.)
-		} else if clientID != client.ID {
-			// TODO(k15tfu): ?? invalid_grant or invalid_client or invalid_request
-			http.Error(w, ErrorContent(ErrTknInvalidGrant, "clientID is missing or invalid"), http.StatusBadRequest)
-			log.Printf("400 invalid_grant clientID is mismatched, clientID: %v client.ID: %v", clientID, client.ID)
-			return nil
-		}
-
-		// PKCE:
-		if client.PKCE {
-			codeVerifier := params["code_verifier"]
-			if codeVerifier == "" {
-				http.Error(w, ErrorContent(ErrTknInvalidGrant, "code_verifier is missing or invalid"), http.StatusBadRequest) // FIXME(k15tfu): ?? invalid_grant or invalid_request
-				log.Printf("400 invalid_grant code_verifier is missing or invalid, form: %v", r.PostForm)
-				return nil
-			}
-			codeChallenge, err := NewCodeChallengeFromString(codeVerifier, authCode.CodeChallengeMethod)
-			if err == ErrUnsupportedTransformation {
-				http.Error(w, ErrorContent(ErrTknInvalidGrant, "code_challenge_method not supported"), http.StatusBadRequest)
-				log.Printf("400 invalid_grant code_challenge_method not supported, code_challenge_method: %v", authCode.CodeChallengeMethod)
-				return nil
-			}
-			err = CompareVerifierAndChallenge(CodeVerifier(codeVerifier), codeChallenge)
-			if err != nil {
-				http.Error(w, ErrorContent(ErrTknInvalidGrant, "code_verifier is missing or invalid"), http.StatusBadRequest)
-				log.Printf("400 invalid_grant code_verifier is mismatched, clientID: %v", clientID)
-				return nil
-			}
-		} else { // Otherwise, ignore these parameters.
-			delete(params, "code_verifier")
-		}
-
-		// todo(n.rodionov): validation should not access databases and change state
-		//err = a.Storage.AuthCodeDelete(code)
-		//if err != nil {
-		//	http.Error(w, "500 auth code delete error", http.StatusInternalServerError)
-		//	log.Printf("500 storage.Storage.AuthCodeDelete() failed, err: %v", err)
-		//	return nil
-		//}
 	}
-
-	return params
+	return authCode, nil
 }
 
+// TODO(k15tfu):
+//   The endpoint URI MAY include an "application/x-www-form-urlencoded"
+//   formatted (per Appendix B) query component ([RFC3986] Section 3.4),
+//   which MUST be retained when adding additional query parameters.  The
+//   endpoint URI MUST NOT include a fragment component.
+
+// TODO(k15tfu):
+//   Since requests to the token endpoint result in the transmission of
+//   clear-text credentials (in the HTTP request and response), the
+//   authorization server MUST require the use of TLS as described in
+//   Section 1.6 when sending requests to the token endpoint.
+
+// TODO(k15tfu):
+//   Since this client authentication method involves a password, the
+//   authorization server MUST protect any endpoint utilizing it against
+//   brute force attacks.
 func (a *Auth) TokenHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO(k15tfu):
-		//   The endpoint URI MAY include an "application/x-www-form-urlencoded"
-		//   formatted (per Appendix B) query component ([RFC3986] Section 3.4),
-		//   which MUST be retained when adding additional query parameters.  The
-		//   endpoint URI MUST NOT include a fragment component.
-
-		// TODO(k15tfu):
-		//   Since requests to the token endpoint result in the transmission of
-		//   clear-text credentials (in the HTTP request and response), the
-		//   authorization server MUST require the use of TLS as described in
-		//   Section 1.6 when sending requests to the token endpoint.
-
-		// TODO(k15tfu):
-		//   Since this client authentication method involves a password, the
-		//   authorization server MUST protect any endpoint utilizing it against
-		//   brute force attacks.
-
-		params := a.validateAccessTokenRequest(w, r)
-		if params == nil {
-			return // error is already reported
+		if r.Method != "POST" {
+			http.Error(w, ErrorContent(ErrTknInvalidRequest, "method not allowed"), http.StatusBadRequest)
+			log.Printf("400 invalid_request method not allowed, method: %v", r.Method)
 		}
 
-		// code already validated.
-		code, _ := params["code"]
-		authCode, err := a.Storage.AuthCodeRead(code)
+		params, err := accessTokenRequestParamsNew(r.Form)
 		if err != nil {
-			http.Error(w, ErrorContent(ErrInternalServerError, "internal server error"), http.StatusInternalServerError)
-			log.Printf("could not access auth code storage")
+			http.Error(w, ErrorContent(ErrInvalidRequest, "invalid parameters found"), http.StatusBadRequest)
+			log.Println("invalid parameters found")
+		}
+		authCode, err := a.clientAuthenticate(w, r, params)
+		if err != nil {
+			return // error has already been reported
+		}
+
+		switch params.GrantType {
+		case "grant_type":
+			a.handleAuthorizationCode(w, r, authCode, params)
+		case "refresh_token":
+			a.handleRefreshToken(w, r, authCode, params)
+		default:
+			http.Error(w, ErrorContent(ErrTknUnsupportedGrantType, "unsupported grant type"), http.StatusBadRequest)
+			log.Println("unrecognized grant_type:", params.GrantType)
 			return
 		}
-		// todo(n.rodionov): delete auth code
-
-		// 4.1.4.  Access Token Response
-		// https://tools.ietf.org/html/rfc6749#section-4.1.4
-		token, err := CreateToken(authCode.Claims, a.SignKey)
-		if err != nil {
-			http.Error(w, "500 create token error", http.StatusInternalServerError)
-			log.Printf("500 auth.CreateToken() failed, err: %v", err)
-			return
-		}
-
-		resp := struct {
-			AccessToken  string `json:"access_token"`
-			TokenType    string `json:"token_type"`
-			RefreshToken string `json:"refresh_token,omitempty"`
-			ExpiresIn    int    `json:"expires_in"`
-		}{
-			AccessToken:  token,
-			TokenType:    "Bearer",
-			RefreshToken: "",   // todo
-			ExpiresIn:    3600, // todo
-		}
-		data, err := json.Marshal(resp)
-		if err != nil {
-			http.Error(w, "500 marshal error", http.StatusInternalServerError)
-			log.Printf("500 json.Marshal() failed, err: %v", err)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-		w.Write(data)
 	})
+}
+
+func (a *Auth) handleAuthorizationCode(w http.ResponseWriter, r *http.Request, authCode storage.AuthCode, params AccessTokenRequestParams) {
+	a.issueToken(w, r, authCode, params)
+}
+
+func (a *Auth) handleRefreshToken(w http.ResponseWriter, r *http.Request, authCode storage.AuthCode, params AccessTokenRequestParams) {
+	refreshToken, err := a.RefreshTokenRepository.Read(params.RefreshToken)
+	if err == ErrNotFound {
+		http.Error(w, "Not Found", http.StatusNotFound)
+		log.Println("refresh token was not found")
+		return
+	} else if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		log.Println("RefreshTokenRepository.Read() failed, error:", err)
+		return
+	}
+
+	if refreshToken.ClientID != authCode.ClientID {
+		http.Error(w, ErrorContent(ErrTknInvalidClient, "invalid client"), http.StatusBadRequest)
+		log.Printf("400 invalid_grant authCode.ClientID is mismatched, authCode.ClientID: %v client.ID: %v", refreshToken.ClientID, authCode.ClientID)
+		return
+	}
+
+	a.issueToken(w, r, authCode, params)
+
+	err = a.RefreshTokenRepository.Delete(params.RefreshToken)
+	if err != nil {
+		log.Println("could not delete refresh token")
+		return
+	}
+}
+
+func (a *Auth) issueToken(w http.ResponseWriter, r *http.Request, authCode storage.AuthCode, params AccessTokenRequestParams) {
+	token, err := CreateToken(authCode.Claims, a.SignKey)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		log.Println("auth.CreateToken() failed, err:", err)
+		return
+	}
+	refreshToken := RefreshToken{
+		Token:     NewRandomID(),
+		CreatedAt: time.Now(),
+		ClientID:  params.ClientID,
+	}
+
+	err = a.RefreshTokenRepository.Create(refreshToken)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		log.Println("failed to store refresh token, err:", err)
+		return
+	}
+
+	resp := struct {
+		AccessToken  string `json:"access_token"`
+		TokenType    string `json:"token_type"`
+		RefreshToken string `json:"refresh_token, omitempty"`
+		ExpiresIn    int
+	}{
+		AccessToken:  token,
+		TokenType:    "Bearer",
+		RefreshToken: refreshToken.Token,
+		ExpiresIn:    3600, // todo
+	}
+
+	data, err := json.Marshal(resp)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		log.Println("json.Marshal() failed, err:", err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, err = w.Write(data)
+	if err != nil {
+		log.Println("w.Write() failed, err:", err)
+	}
 }
 
 // todo: change handler name
