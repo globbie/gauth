@@ -1,9 +1,11 @@
 package auth
 
 import (
+	"bytes"
 	"github.com/globbie/gauth/pkg/auth/storage/memory"
 	"github.com/globbie/gauth/pkg/auth/view"
 	"github.com/globbie/gauth/pkg/auth/view/json"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -47,6 +49,20 @@ func newAuthRequest(t *testing.T /*, method, accept string, params url.Values*/)
 func serveAuthRequest(req *http.Request, t *testing.T) *httptest.ResponseRecorder {
 	rr := httptest.NewRecorder()
 	auth.AuthorizationHandler().ServeHTTP(rr, req)
+	return rr
+}
+
+func newTokenRequest(t *testing.T /*, method, accept string, params url.Values*/) *http.Request {
+	req, err := http.NewRequest("POST", "/token", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return req
+}
+
+func serveTokenRequest(req *http.Request, t *testing.T) *httptest.ResponseRecorder {
+	rr := httptest.NewRecorder()
+	auth.TokenHandler().ServeHTTP(rr, req)
 	return rr
 }
 
@@ -405,3 +421,204 @@ func TestAuthSuccess(t *testing.T) {
 	}
 	//t.Errorf("unexpected body: %v", rr.Body)
 }
+
+func TestTokenInvalidMethod(t *testing.T) {
+	for _, method := range []string{"GET", "HEAD", "PUT"} {
+		req := newTokenRequest(t)
+		req.Method = method
+
+		rr := serveTokenRequest(req, t) // 400 invalid_request method not allowed
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("unexpected status code: %v", rr.Code)
+		}
+		if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "method not allowed")+"\n" {
+			t.Errorf("unexpected body: %v", rr.Body)
+		}
+	}
+}
+
+func TestTokenNoBasicAuth(t *testing.T) {
+	req := newTokenRequest(t)
+
+	rr := serveTokenRequest(req, t) // 401 invalid_client Authorization is missing or invalid
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Header().Get("WWW-Authenticate") != "Basic" {
+		t.Errorf("unexpected WWW-Authenticate: %v", rr.Header().Get("WWW-Authenticate"))
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidClient, "auth is missing or invalid")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+func TestTokenBasicAuthNoClientID(t *testing.T) {
+	req := newTokenRequest(t)
+	req.SetBasicAuth("", "")
+
+	rr := serveTokenRequest(req, t) // 401 invalid_client Authorization is missing or invalid
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Header().Get("WWW-Authenticate") != "Basic" {
+		t.Errorf("unexpected WWW-Authenticate: %v", rr.Header().Get("WWW-Authenticate"))
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidClient, "auth is missing or invalid")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+// func TestTokenBasicAuthNonParsableClientID(t *testing.T) {} // ??
+
+func TestTokenBasicAuthUnknownClientID(t *testing.T) {
+	req := newTokenRequest(t)
+	req.SetBasicAuth("unknown-client", "")
+
+	rr := serveTokenRequest(req, t) // 401 invalid_client client_id not registered
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Header().Get("WWW-Authenticate") != "Basic" {
+		t.Errorf("unexpected WWW-Authenticate: %v", rr.Header().Get("WWW-Authenticate"))
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidClient, "auth is missing or invalid")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+func TestTokenBasicAuthNoClientSecret(t *testing.T) {
+	req := newTokenRequest(t)
+	req.SetBasicAuth("test-client", "")
+
+	rr := serveTokenRequest(req, t) // 400 invalid_request http.Request.ParseForm() failed
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "non-parsable request")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+// func TestTokenBasicAuthNonParsableClientSecret(t *testing.T) {} // ??
+
+func TestTokenNonParsableRequest(t *testing.T) {
+	req := newTokenRequest(t)
+	req.SetBasicAuth("test-client", "test-secret")
+	params := url.Values{"grant_type": []string{""}}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode() + "%")))
+
+	rr := serveTokenRequest(req, t) // 400 invalid_request http.Request.ParseForm() failed
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "non-parsable request")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+func TestTokenEmptyParam(t *testing.T) {
+	req := newTokenRequest(t)
+	req.SetBasicAuth("test-client", "test-secret")
+	params := url.Values{
+		"grant_type": []string{""}}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+
+	rr := serveTokenRequest(req, t) // 400 invalid_request grant_type is missing or invalid
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "grant_type is missing or invalid")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+func TestTokenUnknownParam(t *testing.T) {
+	req := newTokenRequest(t)
+	req.SetBasicAuth("test-client", "test-secret")
+	params := url.Values{
+		"unknown-param": []string{"1", "2"}}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+
+	rr := serveTokenRequest(req, t) // 400 invalid_request grant_type is missing or invalid
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "grant_type is missing or invalid")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+func TestTokenDuplicateParams(t *testing.T) {
+	req := newTokenRequest(t)
+	req.SetBasicAuth("test-client", "test-secret")
+	params := url.Values{
+		"code": []string{"1", "2"}}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+
+	rr := serveTokenRequest(req, t) // 400 invalid_request duplicate parameters found
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "duplicate parameters found")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+func TestTokenNoGrantType(t *testing.T) {
+	req := newTokenRequest(t)
+	req.SetBasicAuth("test-client", "test-secret")
+	params := url.Values{
+		"code": []string{"1"}}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+
+	rr := serveTokenRequest(req, t) // 400 invalid_request grant_type is missing or invalid
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "grant_type is missing or invalid")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+func TestTokenUnknownGrantType(t *testing.T) {
+	req := newTokenRequest(t)
+	req.SetBasicAuth("test-client", "test-secret")
+	params := url.Values{
+		"grant_type": []string{"unknown-grant"}}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+
+	rr := serveTokenRequest(req, t) // 400 invalid_request grant_type is missing or invalid
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "grant_type is missing or invalid")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+func TestTokenUnsupportedGrantType(t *testing.T) {
+	for _, grant_type := range []string{"password", "client_credentials"} {
+		req := newTokenRequest(t)
+		req.SetBasicAuth("test-client", "test-secret")
+		params := url.Values{
+			"grant_type": []string{grant_type}}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+
+		rr := serveTokenRequest(req, t) // 400 invalid_request grant_type is missing or invalid
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("unexpected status code: %v", rr.Code)
+		}
+		if rr.Body.String() != ErrorContent(ErrTknUnsupportedGrantType, "grant_type not supported")+"\n" {
+			t.Errorf("unexpected body: %v", rr.Body)
+		}
+	}
+}
+
+// TODO(k15tfu):
