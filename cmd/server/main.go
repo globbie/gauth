@@ -59,9 +59,18 @@ func main() {
 		log.Fatalln("could not create storage, error:", err)
 	}
 
+	authConfig := auth.Config{
+		RefreshTokenRepositoryConfig: cfg.Repository.RefreshToken.Config,
+	}
+
 	vRouter := view.NewRouter()
 
-	Auth := auth.New(VerifyKey, SignKey, storage, vRouter)
+	Auth, err := auth.New(VerifyKey, SignKey, storage, vRouter, authConfig)
+	if err != nil {
+		log.Fatalln("could not create Auth object, err:", err)
+	}
+
+	// todo(n.rodionov): wrap all setup into factory method
 	Auth.URLPrefix = "/auth/" // todo
 
 	for _, cView := range cfg.Views {

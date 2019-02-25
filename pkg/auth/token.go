@@ -17,7 +17,7 @@ func CreateToken(claims storage.Claims, signKey *rsa.PrivateKey) (string, error)
 	token := jwt.New(jwt.GetSigningMethod("RS256"))
 	token.Claims = &Claims{
 		StandardClaims: &jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Minute * 1).Unix(),
+			ExpiresAt: time.Now().Add(time.Hour * 1).Unix(),
 		},
 		Email: claims.UserEmail,
 	}
