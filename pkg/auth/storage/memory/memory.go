@@ -118,6 +118,7 @@ func (s *MemoryStorage) AuthRequestDelete(uid string) error {
 	if !ok {
 		return storage.ErrNotFound
 	}
+	delete(s.authRequests, uid)
 	return nil
 }
 
