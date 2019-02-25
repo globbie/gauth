@@ -144,5 +144,6 @@ func (s *MemoryStorage) AuthCodeDelete(uid string) error {
 	if !ok {
 		return storage.ErrNotFound
 	}
+	delete(s.authCodes, uid)
 	return nil
 }
