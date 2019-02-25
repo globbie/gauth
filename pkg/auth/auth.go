@@ -437,7 +437,7 @@ func (a *Auth) validateAccessTokenRequest(w http.ResponseWriter, r *http.Request
 		//         authorization request as described in Section 4.1.1, and their
 		//         values MUST be identical.
 
-		clientID := params["clientID"]
+		clientID := params["client_id"]
 		if clientID == "" {
 			// clientID is required only if for unauthenticated client (See 3.2.1.)
 		} else if clientID != client.ID {
