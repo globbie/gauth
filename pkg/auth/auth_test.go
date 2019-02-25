@@ -2,6 +2,9 @@ package auth
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
+	"github.com/globbie/gauth/pkg/auth/storage"
 	"github.com/globbie/gauth/pkg/auth/storage/memory"
 	"github.com/globbie/gauth/pkg/auth/view"
 	"github.com/globbie/gauth/pkg/auth/view/json"
@@ -9,18 +12,21 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 )
 
 var auth *Auth
 
 func init() {
+	signKey, _ := rsa.GenerateKey(rand.Reader, 512)
+
 	storage := memoryStorage.New()
 
 	viewRouter := view.NewRouter()
 	viewRouter.RegisterContentType("application/json", &json.View{})
 
-	auth = New(nil, nil, &storage, viewRouter)
+	auth = New(nil, signKey, &storage, viewRouter)
 	auth.AddClient(Client{ID: ""}) // to catch lookups for client with an empty ID.
 	auth.AddClient(
 		Client{
@@ -452,7 +458,7 @@ func TestTokenNoBasicAuth(t *testing.T) {
 	}
 }
 
-func TestTokenBasicAuthNoClientID(t *testing.T) {
+func TestTokenBasicAuthNoClientId(t *testing.T) {
 	req := newTokenRequest(t)
 	req.SetBasicAuth("", "")
 
@@ -468,9 +474,9 @@ func TestTokenBasicAuthNoClientID(t *testing.T) {
 	}
 }
 
-// func TestTokenBasicAuthNonParsableClientID(t *testing.T) {} // ??
+// func TestTokenBasicAuthNonParsableClientId(t *testing.T) {} // ??
 
-func TestTokenBasicAuthUnknownClientID(t *testing.T) {
+func TestTokenBasicAuthUnknownClientId(t *testing.T) {
 	req := newTokenRequest(t)
 	req.SetBasicAuth("unknown-client", "")
 
@@ -621,4 +627,143 @@ func TestTokenUnsupportedGrantType(t *testing.T) {
 	}
 }
 
-// TODO(k15tfu):
+func TestTokenAuthCodeInvalidClientSecret(t *testing.T) {
+	req := newTokenRequest(t)
+	req.SetBasicAuth("test-client", "invalid-secret")
+	params := url.Values{
+		"grant_type": []string{"authorization_code"}}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+
+	rr := serveTokenRequest(req, t) // 401 invalid_client client_secret is mismatched
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Header().Get("WWW-Authenticate") != "Basic" {
+		t.Errorf("unexpected WWW-Authenticate: %v", rr.Header().Get("WWW-Authenticate"))
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidClient, "auth is missing or invalid")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+func TestTokenAuthCodeNoCode(t *testing.T) {
+	req := newTokenRequest(t)
+	req.SetBasicAuth("test-client", "test-secret")
+	params := url.Values{
+		"grant_type": []string{"authorization_code"}}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+
+	rr := serveTokenRequest(req, t) // 400 invalid_request code is missing or invalid
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "code is missing or invalid")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+func TestTokenAuthCodeInvalidCode(t *testing.T) {
+	req := newTokenRequest(t)
+	req.SetBasicAuth("test-client", "test-secret")
+	params := url.Values{
+		"grant_type": []string{"authorization_code"},
+		"code":       []string{"invalid-code"}}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+
+	rr := serveTokenRequest(req, t) // 400 invalid_grant storage.Storage.AuthCodeRead() failed
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidGrant, "code is missing or invalid")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+func TestTokenAuthCodeInvalidCodeOwner(t *testing.T) {
+	auth.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "another-client"})
+	defer func() { auth.Storage.AuthCodeDelete("test-code") }()
+
+	req := newTokenRequest(t)
+	req.SetBasicAuth("test-client", "test-secret")
+	params := url.Values{
+		"grant_type": []string{"authorization_code"},
+		"code":       []string{"test-code"}}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+
+	rr := serveTokenRequest(req, t) // 400 invalid_grant authCode.ClientID is mismatched
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidGrant, "code is missing or invalid")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+func TestTokenAuthCodeNoClientId(t *testing.T) {
+	auth.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "test-client"})
+	defer func() { auth.Storage.AuthCodeDelete("test-code") }()
+
+	req := newTokenRequest(t)
+	req.SetBasicAuth("test-client", "test-secret")
+	params := url.Values{
+		"grant_type": []string{"authorization_code"},
+		"code":       []string{"test-code"}}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+
+	rr := serveTokenRequest(req, t)
+	if rr.Code != http.StatusOK {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "access_token") {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+func TestTokenAuthCodeInvalidClientId(t *testing.T) {
+	auth.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "test-client"})
+	defer func() { auth.Storage.AuthCodeDelete("test-code") }()
+
+	req := newTokenRequest(t)
+	req.SetBasicAuth("test-client", "test-secret")
+	params := url.Values{
+		"grant_type": []string{"authorization_code"},
+		"code":       []string{"test-code"},
+		"client_id":  []string{"another-client"}}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+
+	rr := serveTokenRequest(req, t) // 400 invalid_grant clientID is mismatched
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Body.String() != ErrorContent(ErrTknInvalidGrant, "clientID is missing or invalid")+"\n" {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
+
+func TestTokenAuthCodeSuccess(t *testing.T) {
+	auth.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "test-client"})
+	defer func() { auth.Storage.AuthCodeDelete("test-code") }()
+
+	req := newTokenRequest(t)
+	req.SetBasicAuth("test-client", "test-secret")
+	params := url.Values{
+		"grant_type": []string{"authorization_code"},
+		"code":       []string{"test-code"},
+		"client_id":  []string{"test-client"}}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+
+	rr := serveTokenRequest(req, t)
+	if rr.Code != http.StatusOK {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "access_token") {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
