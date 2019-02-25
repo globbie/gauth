@@ -350,10 +350,10 @@ func (a *Auth) validateAccessTokenRequest(w http.ResponseWriter, r *http.Request
 	}
 
 	clientID, clientSecret, ok := r.BasicAuth()
-	clientID, _ = url.QueryUnescape(clientID)
+	clientID, _ = url.QueryUnescape(clientID) // TODO(k15tfu): ?? done implicitly
 	if clientSecret != "" { // client_secret can be an empty string
 		var err error
-		if clientSecret, err = url.QueryUnescape(clientSecret); err != nil {
+		if clientSecret, err = url.QueryUnescape(clientSecret); err != nil { // TODO(k15tfu): ?? done implicitly
 			ok = false
 		}
 	}
