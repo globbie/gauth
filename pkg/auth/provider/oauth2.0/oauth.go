@@ -24,8 +24,8 @@ func (c *Config) New(s storage.Storage, id string) (provider.IdentityProvider, e
 			ClientID:     c.ClientID,
 			ClientSecret: c.ClientSecret,
 			RedirectURL:  c.RedirectURI,
-			Scopes:       []string{"TODO"}, // todo
-			Endpoint:     oauth2.Endpoint{},            //todo
+			Scopes:       []string{"TODO"},  // todo
+			Endpoint:     oauth2.Endpoint{}, //todo
 		},
 	}
 	err := s.ProviderCreate(id)

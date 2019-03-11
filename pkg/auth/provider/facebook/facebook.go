@@ -99,7 +99,7 @@ func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq stor
 	err = json.Unmarshal(body, &userInfo)
 
 	return provider.UserIdentity{
-		Email: userInfo.Email,
+		Email:  userInfo.Email,
 		UserID: userInfo.ID,
 	}, nil
 }

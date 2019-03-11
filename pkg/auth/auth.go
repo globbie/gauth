@@ -342,7 +342,7 @@ func (a *Auth) AuthorizationHandler() http.Handler {
 // todo(n.rodionov): break this structure on to code -> token & refresh token -> token request structures
 type AccessTokenRequestParams struct {
 	// OAuth2.0 request parameters
-	GrantType   string
+	GrantType string
 
 	// access token request parameters
 	AuthCodeID  string

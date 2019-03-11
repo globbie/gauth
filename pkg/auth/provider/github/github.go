@@ -84,4 +84,3 @@ func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq stor
 		Email: *user.Email,
 	}, nil
 }
-

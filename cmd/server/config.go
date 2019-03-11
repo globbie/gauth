@@ -60,12 +60,12 @@ type Repository struct {
 }
 
 type RefreshTokenRepository struct {
-	Type string `json:"entity"`
+	Type   string                            `json:"entity"`
 	Config auth.RefreshTokenRepositoryConfig `json:"config"`
 }
 
 var refreshTokenRepositoryConfigs = map[string]func() auth.RefreshTokenRepositoryConfig{
-	"in-memory": func() auth.RefreshTokenRepositoryConfig { return new(in_memory.Config)},
+	"in-memory": func() auth.RefreshTokenRepositoryConfig { return new(in_memory.Config) },
 }
 
 func (r *RefreshTokenRepository) UnmarshalJSON(b []byte) error {

@@ -110,8 +110,7 @@ func (p *Provider) Callback(w http.ResponseWriter, r *http.Request, authReq stor
 		return provider.UserIdentity{}, err
 	}
 
-	identity := provider.UserIdentity{
-	}
+	identity := provider.UserIdentity{}
 	return identity, nil
 }
 

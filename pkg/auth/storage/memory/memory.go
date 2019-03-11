@@ -100,7 +100,7 @@ func (s *MemoryStorage) AuthRequestRead(uid string) (a storage.AuthRequest, err 
 	return
 }
 
-func (s *MemoryStorage) AuthRequestUpdate(uid string, updater func (a storage.AuthRequest) (storage.AuthRequest, error)) error {
+func (s *MemoryStorage) AuthRequestUpdate(uid string, updater func(a storage.AuthRequest) (storage.AuthRequest, error)) error {
 	a, ok := s.authRequests[uid]
 	if !ok {
 		return storage.ErrNotFound
