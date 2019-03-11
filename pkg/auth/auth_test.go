@@ -1,13 +1,15 @@
-package auth
+package auth_test
 
 import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
+	"github.com/globbie/gauth/pkg/auth"
 	"github.com/globbie/gauth/pkg/auth/storage"
 	"github.com/globbie/gauth/pkg/auth/storage/memory"
 	"github.com/globbie/gauth/pkg/auth/view"
 	"github.com/globbie/gauth/pkg/auth/view/json"
+	"github.com/globbie/gauth/pkg/repositories/in-memory"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -16,7 +18,7 @@ import (
 	"testing"
 )
 
-var auth *Auth
+var ath *auth.Auth
 
 func init() {
 	signKey, _ := rsa.GenerateKey(rand.Reader, 512)
@@ -26,10 +28,13 @@ func init() {
 	viewRouter := view.NewRouter()
 	viewRouter.RegisterContentType("application/json", &json.View{})
 
-	auth = New(nil, signKey, &storage, viewRouter)
-	auth.AddClient(Client{ID: ""}) // to catch lookups for client with an empty ID.
-	auth.AddClient(
-		Client{
+	refreshTokenRepositoryConfig := in_memory.Config{}
+
+	ath, _ = auth.New(nil, signKey, &storage, viewRouter, auth.Config{
+		RefreshTokenRepositoryConfig: &refreshTokenRepositoryConfig})
+	ath.AddClient(auth.Client{ID: ""}) // to catch lookups for client with an empty ID.
+	ath.AddClient(
+		auth.Client{
 			ID:     "test-client",
 			Secret: "test-secret",
 			RedirectURIs: []string{
@@ -41,7 +46,7 @@ func init() {
 	//	ClientID:     "test-client",
 	//	ClientSecret: "test-secret",
 	//	RedirectURI:  "http://test-client.net/callback"}.New(&storage, "???")
-	//auth.AddIdentityProvider("???", p)
+	//ath.AddIdentityProvider("???", p)
 }
 
 func newAuthRequest(t *testing.T /*, method, accept string, params url.Values*/) *http.Request {
@@ -54,7 +59,7 @@ func newAuthRequest(t *testing.T /*, method, accept string, params url.Values*/)
 
 func serveAuthRequest(req *http.Request, t *testing.T) *httptest.ResponseRecorder {
 	rr := httptest.NewRecorder()
-	auth.AuthorizationHandler().ServeHTTP(rr, req)
+	ath.AuthorizationHandler().ServeHTTP(rr, req)
 	return rr
 }
 
@@ -68,7 +73,7 @@ func newTokenRequest(t *testing.T /*, method, accept string, params url.Values*/
 
 func serveTokenRequest(req *http.Request, t *testing.T) *httptest.ResponseRecorder {
 	rr := httptest.NewRecorder()
-	auth.TokenHandler().ServeHTTP(rr, req)
+	ath.TokenHandler().ServeHTTP(rr, req)
 	return rr
 }
 
@@ -437,7 +442,7 @@ func TestTokenInvalidMethod(t *testing.T) {
 		if rr.Code != http.StatusBadRequest {
 			t.Errorf("unexpected status code: %v", rr.Code)
 		}
-		if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "method not allowed")+"\n" {
+		if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidRequest, "method not allowed")+"\n" {
 			t.Errorf("unexpected body: %v", rr.Body)
 		}
 	}
@@ -453,7 +458,7 @@ func TestTokenNoBasicAuth(t *testing.T) {
 	if rr.Header().Get("WWW-Authenticate") != "Basic" {
 		t.Errorf("unexpected WWW-Authenticate: %v", rr.Header().Get("WWW-Authenticate"))
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidClient, "auth is missing or invalid")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidClient, "auth is missing or invalid")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -469,7 +474,7 @@ func TestTokenBasicAuthNoClientId(t *testing.T) {
 	if rr.Header().Get("WWW-Authenticate") != "Basic" {
 		t.Errorf("unexpected WWW-Authenticate: %v", rr.Header().Get("WWW-Authenticate"))
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidClient, "auth is missing or invalid")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidClient, "auth is missing or invalid")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -487,7 +492,7 @@ func TestTokenBasicAuthUnknownClientId(t *testing.T) {
 	if rr.Header().Get("WWW-Authenticate") != "Basic" {
 		t.Errorf("unexpected WWW-Authenticate: %v", rr.Header().Get("WWW-Authenticate"))
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidClient, "auth is missing or invalid")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidClient, "auth is missing or invalid")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -500,7 +505,7 @@ func TestTokenBasicAuthNoClientSecret(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "non-parsable request")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidRequest, "non-parsable request")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -518,7 +523,7 @@ func TestTokenNonParsableRequest(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "non-parsable request")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidRequest, "non-parsable request")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -535,7 +540,7 @@ func TestTokenEmptyParam(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "grant_type is missing or invalid")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidRequest, "grant_type is missing or invalid")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -552,7 +557,7 @@ func TestTokenUnknownParam(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "grant_type is missing or invalid")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidRequest, "grant_type is missing or invalid")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -569,7 +574,7 @@ func TestTokenDuplicateParams(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "duplicate parameters found")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidRequest, "duplicate parameters found")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -586,7 +591,7 @@ func TestTokenNoGrantType(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "grant_type is missing or invalid")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidRequest, "grant_type is missing or invalid")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -603,7 +608,7 @@ func TestTokenUnknownGrantType(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "grant_type is missing or invalid")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidRequest, "grant_type is missing or invalid")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -621,7 +626,7 @@ func TestTokenUnsupportedGrantType(t *testing.T) {
 		if rr.Code != http.StatusBadRequest {
 			t.Errorf("unexpected status code: %v", rr.Code)
 		}
-		if rr.Body.String() != ErrorContent(ErrTknUnsupportedGrantType, "grant_type not supported")+"\n" {
+		if rr.Body.String() != auth.ErrorContent(auth.ErrTknUnsupportedGrantType, "grant_type not supported")+"\n" {
 			t.Errorf("unexpected body: %v", rr.Body)
 		}
 	}
@@ -642,7 +647,7 @@ func TestTokenAuthCodeInvalidClientSecret(t *testing.T) {
 	if rr.Header().Get("WWW-Authenticate") != "Basic" {
 		t.Errorf("unexpected WWW-Authenticate: %v", rr.Header().Get("WWW-Authenticate"))
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidClient, "auth is missing or invalid")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidClient, "auth is missing or invalid")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -659,7 +664,7 @@ func TestTokenAuthCodeNoCode(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidRequest, "code is missing or invalid")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidRequest, "code is missing or invalid")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -677,14 +682,14 @@ func TestTokenAuthCodeInvalidCode(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidGrant, "code is missing or invalid")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidGrant, "code is missing or invalid")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
 
 func TestTokenAuthCodeInvalidCodeOwner(t *testing.T) {
-	auth.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "another-client"})
-	defer func() { auth.Storage.AuthCodeDelete("test-code") }()
+	ath.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "another-client"})
+	defer func() { ath.Storage.AuthCodeDelete("test-code") }()
 
 	req := newTokenRequest(t)
 	req.SetBasicAuth("test-client", "test-secret")
@@ -698,14 +703,14 @@ func TestTokenAuthCodeInvalidCodeOwner(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidGrant, "code is missing or invalid")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidGrant, "code is missing or invalid")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
 
 func TestTokenAuthCodeNoClientId(t *testing.T) {
-	auth.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "test-client"})
-	defer func() { auth.Storage.AuthCodeDelete("test-code") }()
+	ath.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "test-client"})
+	defer func() { ath.Storage.AuthCodeDelete("test-code") }()
 
 	req := newTokenRequest(t)
 	req.SetBasicAuth("test-client", "test-secret")
@@ -725,8 +730,8 @@ func TestTokenAuthCodeNoClientId(t *testing.T) {
 }
 
 func TestTokenAuthCodeInvalidClientId(t *testing.T) {
-	auth.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "test-client"})
-	defer func() { auth.Storage.AuthCodeDelete("test-code") }()
+	ath.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "test-client"})
+	defer func() { ath.Storage.AuthCodeDelete("test-code") }()
 
 	req := newTokenRequest(t)
 	req.SetBasicAuth("test-client", "test-secret")
@@ -741,14 +746,14 @@ func TestTokenAuthCodeInvalidClientId(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if rr.Body.String() != ErrorContent(ErrTknInvalidGrant, "clientID is missing or invalid")+"\n" {
+	if rr.Body.String() != auth.ErrorContent(auth.ErrTknInvalidGrant, "clientID is missing or invalid")+"\n" {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
 
 func TestTokenAuthCodeSuccess(t *testing.T) {
-	auth.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "test-client"})
-	defer func() { auth.Storage.AuthCodeDelete("test-code") }()
+	ath.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "test-client"})
+	defer func() { ath.Storage.AuthCodeDelete("test-code") }()
 
 	req := newTokenRequest(t)
 	req.SetBasicAuth("test-client", "test-secret")
