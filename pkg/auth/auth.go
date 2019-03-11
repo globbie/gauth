@@ -507,6 +507,7 @@ func (a *Auth) TokenHandler() http.Handler {
 		if r.Method != "POST" {
 			http.Error(w, ErrorContent(ErrTknInvalidRequest, "method not allowed"), http.StatusBadRequest)
 			log.Printf("400 invalid_request method not allowed, method: %v", r.Method)
+			return
 		}
 
 		params, err := accessTokenRequestParamsNew(r.Form)
