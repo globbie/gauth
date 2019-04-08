@@ -429,11 +429,6 @@ func (a *Auth) clientAuthenticate(w http.ResponseWriter, r *http.Request, params
 		log.Printf("401 invalid_client client_id not registered, client_id: %v", clientID)
 		return authCode, errors.New("authentication failed")
 	}
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, ErrorContent(ErrTknInvalidRequest, "non-parsable request"), http.StatusBadRequest)
-		log.Printf("400 invalid_request http.Request.ParseForm() failed, err: %v", err)
-		return authCode, errors.New("authentication failed")
-	}
 
 	if !client.PKCE && subtle.ConstantTimeCompare([]byte(client.Secret), []byte(clientSecret)) != 1 {
 		w.Header().Set("WWW-Authenticate", "Basic")
@@ -509,11 +504,17 @@ func (a *Auth) TokenHandler() http.Handler {
 			log.Printf("400 invalid_request method not allowed, method: %v", r.Method)
 			return
 		}
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, ErrorContent(ErrTknInvalidRequest, "non-parsable request"), http.StatusBadRequest)
+			log.Printf("400 invalid_request http.Request.ParseForm() failed, err: %v", err)
+			return
+		}
 
 		params, err := accessTokenRequestParamsNew(r.Form)
 		if err != nil {
-			http.Error(w, ErrorContent(ErrInvalidRequest, "invalid parameters found"), http.StatusBadRequest)
-			log.Println("invalid parameters found")
+			http.Error(w, ErrorContent(ErrInvalidRequest, err.Error()), http.StatusBadRequest)
+			log.Printf("400 invalid_request accessTokenRequestParamsNew() failed, err: %v", err)
+			return
 		}
 		authCode, err := a.clientAuthenticate(w, r, params)
 		if err != nil {
