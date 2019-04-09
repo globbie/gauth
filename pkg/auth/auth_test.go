@@ -10,6 +10,7 @@ import (
 	"github.com/globbie/gauth/pkg/auth/view"
 	"github.com/globbie/gauth/pkg/auth/view/json"
 	"github.com/globbie/gauth/pkg/repositories/in-memory"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -57,8 +58,17 @@ func withMethod(method string) Option {
 func withAccept(accept string) Option {
 	return func(req *http.Request) { req.Header.Set("Accept", accept) }
 }
+func withBasicAuth(username, password string) Option {
+	return func(req *http.Request) { req.SetBasicAuth(username, password) }
+}
 func withParams(params url.Values) Option {
 	return func(req *http.Request) { req.URL.RawQuery = params.Encode() }
+}
+func withContentParams(params url.Values) Option {
+	return func(req *http.Request) {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+	}
 }
 
 func newAuthRequest(t *testing.T, opts ...Option) *http.Request {
@@ -66,11 +76,12 @@ func newAuthRequest(t *testing.T, opts ...Option) *http.Request {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
 
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
 	for _, opt := range opts {
 		opt(req)
 	}
+
 	return req
 }
 
@@ -80,11 +91,16 @@ func serveAuthRequest(req *http.Request, t *testing.T) *httptest.ResponseRecorde
 	return rr
 }
 
-func newTokenRequest(t *testing.T /*, method, accept string, params url.Values*/) *http.Request {
+func newTokenRequest(t *testing.T, opts ...Option) *http.Request {
 	req, err := http.NewRequest("POST", "/token", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	for _, opt := range opts {
+		opt(req)
+	}
+
 	return req
 }
 
@@ -234,7 +250,7 @@ func TestAuthUnknownRedirectUri(t *testing.T) {
 	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
 		"client_id":    {"test-client"},
 		"redirect_uri": {"http://test-client.net/unknown-callback"},
-		}))
+	}))
 
 	rr := serveAuthRequest(req, t) // 400 redirect_uri is mismatched
 	if rr.Code != http.StatusBadRequest {
@@ -248,7 +264,7 @@ func TestAuthUnknownRedirectUri(t *testing.T) {
 func TestAuthNoRedirectUri(t *testing.T) {
 	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
 		"client_id": {"test-client"},
-		}))
+	}))
 
 	rr := serveAuthRequest(req, t) // 400 redirect_uri is missing
 	if rr.Code != http.StatusBadRequest {
@@ -261,7 +277,7 @@ func TestAuthNoRedirectUri(t *testing.T) {
 
 func TestAuthEmptyRedirectUri(t *testing.T) {
 	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
-		"client_id": {"test-client"},
+		"client_id":    {"test-client"},
 		"redirect_uri": {""},
 	}))
 
@@ -452,8 +468,7 @@ func TestTokenNoBasicAuth(t *testing.T) {
 }
 
 func TestTokenBasicAuthNoClientId(t *testing.T) {
-	req := newTokenRequest(t)
-	req.SetBasicAuth("", "")
+	req := newTokenRequest(t, withBasicAuth("", ""))
 	req.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
 
 	rr := serveTokenRequest(req, t) // 401 invalid_client Authorization is missing or invalid
@@ -471,8 +486,7 @@ func TestTokenBasicAuthNoClientId(t *testing.T) {
 // func TestTokenBasicAuthNonParsableClientId(t *testing.T) {} // ??
 
 func TestTokenBasicAuthUnknownClientId(t *testing.T) {
-	req := newTokenRequest(t)
-	req.SetBasicAuth("unknown-client", "")
+	req := newTokenRequest(t, withBasicAuth("unknown-client", ""))
 	req.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
 
 	rr := serveTokenRequest(req, t) // 401 invalid_client client_id not registered
@@ -488,8 +502,7 @@ func TestTokenBasicAuthUnknownClientId(t *testing.T) {
 }
 
 func TestTokenBasicAuthNoClientSecret(t *testing.T) {
-	req := newTokenRequest(t)
-	req.SetBasicAuth("test-client", "")
+	req := newTokenRequest(t, withBasicAuth("test-client", ""))
 
 	rr := serveTokenRequest(req, t) // 400 invalid_request http.Request.ParseForm() failed
 	if rr.Code != http.StatusBadRequest {
@@ -503,11 +516,10 @@ func TestTokenBasicAuthNoClientSecret(t *testing.T) {
 // func TestTokenBasicAuthNonParsableClientSecret(t *testing.T) {} // ??
 
 func TestTokenNonParsableRequest(t *testing.T) {
-	req := newTokenRequest(t)
-	req.SetBasicAuth("test-client", "test-secret")
-	params := url.Values{"grant_type": {""}}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode() + "%")))
+	req := newTokenRequest(t, withBasicAuth("test-client", ""), withContentParams(url.Values{
+		"grant_type": {""},
+	}))
+	req.Body = ioutil.NopCloser(io.MultiReader(req.Body, bytes.NewReader([]byte("%"))))
 
 	rr := serveTokenRequest(req, t) // 400 invalid_request http.Request.ParseForm() failed
 	if rr.Code != http.StatusBadRequest {
@@ -519,12 +531,9 @@ func TestTokenNonParsableRequest(t *testing.T) {
 }
 
 func TestTokenEmptyParam(t *testing.T) {
-	req := newTokenRequest(t)
-	req.SetBasicAuth("test-client", "test-secret")
-	params := url.Values{
-		"grant_type": {""}}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+	req := newTokenRequest(t, withBasicAuth("test-client", "test-secret"), withContentParams(url.Values{
+		"grant_type": {""},
+	}))
 
 	rr := serveTokenRequest(req, t) // 400 invalid_request grant_type is missing or invalid
 	if rr.Code != http.StatusBadRequest {
@@ -536,12 +545,9 @@ func TestTokenEmptyParam(t *testing.T) {
 }
 
 func TestTokenUnknownParam(t *testing.T) {
-	req := newTokenRequest(t)
-	req.SetBasicAuth("test-client", "test-secret")
-	params := url.Values{
-		"unknown-param": {"1", "2"}}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+	req := newTokenRequest(t, withBasicAuth("test-client", "test-secret"), withContentParams(url.Values{
+		"unknown-param": {"1", "2"},
+	}))
 
 	rr := serveTokenRequest(req, t) // 400 invalid_request grant_type is missing or invalid
 	if rr.Code != http.StatusBadRequest {
@@ -553,12 +559,9 @@ func TestTokenUnknownParam(t *testing.T) {
 }
 
 func TestTokenDuplicateParams(t *testing.T) {
-	req := newTokenRequest(t)
-	req.SetBasicAuth("test-client", "test-secret")
-	params := url.Values{
-		"code": {"1", "2"}}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+	req := newTokenRequest(t, withBasicAuth("test-client", "test-secret"), withContentParams(url.Values{
+		"code": {"1", "2"},
+	}))
 
 	rr := serveTokenRequest(req, t) // 400 invalid_request duplicate parameters found
 	if rr.Code != http.StatusBadRequest {
@@ -570,12 +573,9 @@ func TestTokenDuplicateParams(t *testing.T) {
 }
 
 func TestTokenNoGrantType(t *testing.T) {
-	req := newTokenRequest(t)
-	req.SetBasicAuth("test-client", "test-secret")
-	params := url.Values{
-		"code": {"1"}}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+	req := newTokenRequest(t, withBasicAuth("test-client", "test-secret"), withContentParams(url.Values{
+		"code": {"1"},
+	}))
 
 	rr := serveTokenRequest(req, t) // 400 invalid_request grant_type is missing or invalid
 	if rr.Code != http.StatusBadRequest {
@@ -587,12 +587,9 @@ func TestTokenNoGrantType(t *testing.T) {
 }
 
 func TestTokenUnknownGrantType(t *testing.T) {
-	req := newTokenRequest(t)
-	req.SetBasicAuth("test-client", "test-secret")
-	params := url.Values{
-		"grant_type": {"unknown-grant"}}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+	req := newTokenRequest(t, withBasicAuth("test-client", "test-secret"), withContentParams(url.Values{
+		"grant_type": {"unknown-grant"},
+	}))
 
 	rr := serveTokenRequest(req, t) // 400 invalid_request grant_type is missing or invalid
 	if rr.Code != http.StatusBadRequest {
@@ -605,12 +602,9 @@ func TestTokenUnknownGrantType(t *testing.T) {
 
 func TestTokenUnsupportedGrantType(t *testing.T) {
 	for _, grant_type := range []string{"password", "client_credentials"} {
-		req := newTokenRequest(t)
-		req.SetBasicAuth("test-client", "test-secret")
-		params := url.Values{
-			"grant_type": {grant_type}}
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+		req := newTokenRequest(t, withBasicAuth("test-client", "test-secret"), withContentParams(url.Values{
+			"grant_type": {grant_type},
+		}))
 
 		rr := serveTokenRequest(req, t) // 400 invalid_request grant_type is missing or invalid
 		if rr.Code != http.StatusBadRequest {
@@ -623,12 +617,9 @@ func TestTokenUnsupportedGrantType(t *testing.T) {
 }
 
 func TestTokenAuthCodeInvalidClientSecret(t *testing.T) {
-	req := newTokenRequest(t)
-	req.SetBasicAuth("test-client", "invalid-secret")
-	params := url.Values{
-		"grant_type": {"authorization_code"}}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+	req := newTokenRequest(t, withBasicAuth("test-client", "invalid-secret"), withContentParams(url.Values{
+		"grant_type": {"authorization_code"},
+	}))
 
 	rr := serveTokenRequest(req, t) // 401 invalid_client client_secret is mismatched
 	if rr.Code != http.StatusUnauthorized {
@@ -643,12 +634,9 @@ func TestTokenAuthCodeInvalidClientSecret(t *testing.T) {
 }
 
 func TestTokenAuthCodeNoCode(t *testing.T) {
-	req := newTokenRequest(t)
-	req.SetBasicAuth("test-client", "test-secret")
-	params := url.Values{
-		"grant_type": {"authorization_code"}}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+	req := newTokenRequest(t, withBasicAuth("test-client", "test-secret"), withContentParams(url.Values{
+		"grant_type": {"authorization_code"},
+	}))
 
 	rr := serveTokenRequest(req, t) // 400 invalid_request code is missing or invalid
 	if rr.Code != http.StatusBadRequest {
@@ -660,13 +648,10 @@ func TestTokenAuthCodeNoCode(t *testing.T) {
 }
 
 func TestTokenAuthCodeInvalidCode(t *testing.T) {
-	req := newTokenRequest(t)
-	req.SetBasicAuth("test-client", "test-secret")
-	params := url.Values{
+	req := newTokenRequest(t, withBasicAuth("test-client", "test-secret"), withContentParams(url.Values{
 		"grant_type": {"authorization_code"},
-		"code":       {"invalid-code"}}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+		"code":       {"invalid-code"},
+	}))
 
 	rr := serveTokenRequest(req, t) // 400 invalid_grant storage.Storage.AuthCodeRead() failed
 	if rr.Code != http.StatusBadRequest {
@@ -681,13 +666,10 @@ func TestTokenAuthCodeInvalidCodeOwner(t *testing.T) {
 	ath.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "another-client"})
 	defer func() { ath.Storage.AuthCodeDelete("test-code") }()
 
-	req := newTokenRequest(t)
-	req.SetBasicAuth("test-client", "test-secret")
-	params := url.Values{
+	req := newTokenRequest(t, withBasicAuth("test-client", "test-secret"), withContentParams(url.Values{
 		"grant_type": {"authorization_code"},
-		"code":       {"test-code"}}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+		"code":       {"test-code"},
+	}))
 
 	rr := serveTokenRequest(req, t) // 400 invalid_grant authCode.ClientID is mismatched
 	if rr.Code != http.StatusBadRequest {
@@ -702,13 +684,10 @@ func TestTokenAuthCodeNoClientId(t *testing.T) {
 	ath.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "test-client"})
 	defer func() { ath.Storage.AuthCodeDelete("test-code") }()
 
-	req := newTokenRequest(t)
-	req.SetBasicAuth("test-client", "test-secret")
-	params := url.Values{
+	req := newTokenRequest(t, withBasicAuth("test-client", "test-secret"), withContentParams(url.Values{
 		"grant_type": {"authorization_code"},
-		"code":       {"test-code"}}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+		"code":       {"test-code"},
+	}))
 
 	rr := serveTokenRequest(req, t)
 	if rr.Code != http.StatusOK {
@@ -723,14 +702,11 @@ func TestTokenAuthCodeInvalidClientId(t *testing.T) {
 	ath.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "test-client"})
 	defer func() { ath.Storage.AuthCodeDelete("test-code") }()
 
-	req := newTokenRequest(t)
-	req.SetBasicAuth("test-client", "test-secret")
-	params := url.Values{
+	req := newTokenRequest(t, withBasicAuth("test-client", "test-secret"), withContentParams(url.Values{
 		"grant_type": {"authorization_code"},
 		"code":       {"test-code"},
-		"client_id":  {"another-client"}}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+		"client_id":  {"another-client"},
+	}))
 
 	rr := serveTokenRequest(req, t) // 400 invalid_grant clientID is mismatched
 	if rr.Code != http.StatusBadRequest {
@@ -745,14 +721,11 @@ func TestTokenAuthCodeSuccess(t *testing.T) {
 	ath.Storage.AuthCodeCreate(storage.AuthCode{ID: "test-code", ClientID: "test-client"})
 	defer func() { ath.Storage.AuthCodeDelete("test-code") }()
 
-	req := newTokenRequest(t)
-	req.SetBasicAuth("test-client", "test-secret")
-	params := url.Values{
+	req := newTokenRequest(t, withBasicAuth("test-client", "test-secret"), withContentParams(url.Values{
 		"grant_type": {"authorization_code"},
 		"code":       {"test-code"},
-		"client_id":  {"test-client"}}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte(params.Encode())))
+		"client_id":  {"test-client"},
+	}))
 
 	rr := serveTokenRequest(req, t)
 	if rr.Code != http.StatusOK {
