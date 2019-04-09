@@ -66,6 +66,8 @@ func newAuthRequest(t *testing.T, opts ...Option) *http.Request {
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
+
 	for _, opt := range opts {
 		opt(req)
 	}
