@@ -523,7 +523,7 @@ func (a *Auth) TokenHandler() http.Handler {
 		}
 
 		switch params.GrantType {
-		case "grant_type":
+		case "authorization_code":
 			a.handleAuthorizationCode(w, r, authCode, params)
 		case "refresh_token":
 			a.handleRefreshToken(w, r, authCode, params)
