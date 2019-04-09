@@ -97,6 +97,7 @@ func newTokenRequest(t *testing.T, opts ...Option) *http.Request {
 		t.Fatal(err)
 	}
 
+	req.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
 	for _, opt := range opts {
 		opt(req)
 	}
@@ -453,7 +454,6 @@ func TestTokenInvalidMethod(t *testing.T) {
 
 func TestTokenNoBasicAuth(t *testing.T) {
 	req := newTokenRequest(t)
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
 
 	rr := serveTokenRequest(req, t) // 401 invalid_client Authorization is missing or invalid
 	if rr.Code != http.StatusUnauthorized {
@@ -469,7 +469,6 @@ func TestTokenNoBasicAuth(t *testing.T) {
 
 func TestTokenBasicAuthNoClientId(t *testing.T) {
 	req := newTokenRequest(t, withBasicAuth("", ""))
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
 
 	rr := serveTokenRequest(req, t) // 401 invalid_client Authorization is missing or invalid
 	if rr.Code != http.StatusUnauthorized {
@@ -487,7 +486,6 @@ func TestTokenBasicAuthNoClientId(t *testing.T) {
 
 func TestTokenBasicAuthUnknownClientId(t *testing.T) {
 	req := newTokenRequest(t, withBasicAuth("unknown-client", ""))
-	req.Body = ioutil.NopCloser(bytes.NewReader([]byte{}))
 
 	rr := serveTokenRequest(req, t) // 401 invalid_client client_id not registered
 	if rr.Code != http.StatusUnauthorized {
