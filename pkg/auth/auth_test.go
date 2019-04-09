@@ -61,7 +61,7 @@ func withAccept(accept string) Option {
 func withBasicAuth(username, password string) Option {
 	return func(req *http.Request) { req.SetBasicAuth(username, password) }
 }
-func withParams(params url.Values) Option {
+func withURLParams(params url.Values) Option {
 	return func(req *http.Request) { req.URL.RawQuery = params.Encode() }
 }
 func withContentParams(params url.Values) Option {
@@ -147,7 +147,7 @@ func TestAuthInvalidMethod(t *testing.T) {
 }
 
 func TestAuthNonParsableRequest(t *testing.T) {
-	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(url.Values{
 		"client_id": {"test-client"},
 	}))
 	req.URL.RawQuery = req.URL.RawQuery + "%"
@@ -162,7 +162,7 @@ func TestAuthNonParsableRequest(t *testing.T) {
 }
 
 func TestAuthNoClientId(t *testing.T) {
-	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{}))
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(url.Values{}))
 
 	rr := serveAuthRequest(req, t) // 400 client_id is missing or included more than once
 	if rr.Code != http.StatusBadRequest {
@@ -174,7 +174,7 @@ func TestAuthNoClientId(t *testing.T) {
 }
 
 func TestAuthEmptyClientId(t *testing.T) {
-	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(url.Values{
 		"client_id": {""},
 	}))
 
@@ -188,7 +188,7 @@ func TestAuthEmptyClientId(t *testing.T) {
 }
 
 func TestAuthMultipleClientId(t *testing.T) {
-	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(url.Values{
 		"client_id": {"test-client", "test-client"},
 	}))
 
@@ -202,7 +202,7 @@ func TestAuthMultipleClientId(t *testing.T) {
 }
 
 func TestAuthUnknownClientId(t *testing.T) {
-	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(url.Values{
 		"client_id": {"unknown-client"},
 	}))
 
@@ -216,7 +216,7 @@ func TestAuthUnknownClientId(t *testing.T) {
 }
 
 func TestAuthMultipleRedirectUri(t *testing.T) {
-	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(url.Values{
 		"client_id": {"test-client"},
 		"redirect_uri": {
 			"http://test-client.net/callback",
@@ -233,7 +233,7 @@ func TestAuthMultipleRedirectUri(t *testing.T) {
 }
 
 func TestAuthNonParsableRedirectUri(t *testing.T) {
-	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(url.Values{
 		"client_id":    {"test-client"},
 		"redirect_uri": {"http://test-client.net/callback%"},
 	}))
@@ -248,7 +248,7 @@ func TestAuthNonParsableRedirectUri(t *testing.T) {
 }
 
 func TestAuthUnknownRedirectUri(t *testing.T) {
-	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(url.Values{
 		"client_id":    {"test-client"},
 		"redirect_uri": {"http://test-client.net/unknown-callback"},
 	}))
@@ -263,7 +263,7 @@ func TestAuthUnknownRedirectUri(t *testing.T) {
 }
 
 func TestAuthNoRedirectUri(t *testing.T) {
-	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(url.Values{
 		"client_id": {"test-client"},
 	}))
 
@@ -277,7 +277,7 @@ func TestAuthNoRedirectUri(t *testing.T) {
 }
 
 func TestAuthEmptyRedirectUri(t *testing.T) {
-	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(url.Values{
 		"client_id":    {"test-client"},
 		"redirect_uri": {""},
 	}))
@@ -299,7 +299,7 @@ func TestAuthEmptyParam(t *testing.T) {
 		"redirect_uri":  {"http://test-client.net/callback"},
 		"response_type": {""},
 		"state":         {"test-state"}}
-	req := newAuthRequest(t, withAccept("application/json"), withParams(params))
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(params))
 
 	rr := serveAuthRequest(req, t) // 302 invalid_request response_type is missing or invalid
 	if rr.Code != http.StatusFound {
@@ -321,7 +321,7 @@ func TestAuthUnknownParam(t *testing.T) {
 		"redirect_uri":  {"http://test-client.net/callback"},
 		"unknown-param": {"1", "2"},
 		"state":         {"test-state"}}
-	req := newAuthRequest(t, withAccept("application/json"), withParams(params))
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(params))
 
 	rr := serveAuthRequest(req, t) // 302 invalid_request response_type is missing or invalid
 	if rr.Code != http.StatusFound {
@@ -342,7 +342,7 @@ func TestAuthDuplicateParams(t *testing.T) {
 		"client_id":    {"test-client"},
 		"redirect_uri": {"http://test-client.net/callback"},
 		"state":        {"1", "2"}}
-	req := newAuthRequest(t, withAccept("application/json"), withParams(params))
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(params))
 
 	rr := serveAuthRequest(req, t) // 302 invalid_request duplicate parameters found
 	if rr.Code != http.StatusFound {
@@ -362,7 +362,7 @@ func TestAuthNoResponseType(t *testing.T) {
 		"client_id":    {"test-client"},
 		"redirect_uri": {"http://test-client.net/callback"},
 		"state":        {"test-state"}}
-	req := newAuthRequest(t, withAccept("application/json"), withParams(params))
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(params))
 
 	rr := serveAuthRequest(req, t) // 302 invalid_request duplicate parameters found
 	if rr.Code != http.StatusFound {
@@ -384,7 +384,7 @@ func TestAuthUnknownResponseType(t *testing.T) {
 		"redirect_uri":  {"http://test-client.net/callback"},
 		"response_type": {"unknown-type"},
 		"state":         {"test-state"}}
-	req := newAuthRequest(t, withAccept("application/json"), withParams(params))
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(params))
 
 	rr := serveAuthRequest(req, t) // 302 invalid_request duplicate parameters found
 	if rr.Code != http.StatusFound {
@@ -406,7 +406,7 @@ func TestAuthUnsupportedResponseType(t *testing.T) {
 		"redirect_uri":  {"http://test-client.net/callback"},
 		"response_type": {"token"},
 		"state":         {"test-state"}}
-	req := newAuthRequest(t, withAccept("application/json"), withParams(params))
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(params))
 
 	rr := serveAuthRequest(req, t) // 302 invalid_request duplicate parameters found
 	if rr.Code != http.StatusFound {
@@ -423,7 +423,7 @@ func TestAuthUnsupportedResponseType(t *testing.T) {
 }
 
 func TestAuthSuccess(t *testing.T) {
-	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+	req := newAuthRequest(t, withAccept("application/json"), withURLParams(url.Values{
 		"client_id":     {"test-client"},
 		"redirect_uri":  {"http://test-client.net/callback"},
 		"response_type": {"code"},
