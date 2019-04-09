@@ -305,12 +305,7 @@ func TestAuthEmptyParam(t *testing.T) {
 	if rr.Code != http.StatusFound {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	location := params["redirect_uri"][0] + "?" + url.Values{
-		"error":             {"invalid_request"},
-		"error_description": {"response_type is missing or invalid"},
-		"state":             params["state"],
-	}.Encode()
-	if rr.Header().Get("Location") != location {
+	if rr.Header().Get("Location") != auth.ErrorURL(params["redirect_uri"][0], auth.ErrInvalidRequest, "response_type is missing or invalid", params["state"][0]) {
 		t.Errorf("unexpected location: %v", rr.Header().Get("Location"))
 	}
 }
@@ -327,12 +322,7 @@ func TestAuthUnknownParam(t *testing.T) {
 	if rr.Code != http.StatusFound {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	location := params["redirect_uri"][0] + "?" + url.Values{
-		"error":             {"invalid_request"},
-		"error_description": {"response_type is missing or invalid"},
-		"state":             params["state"],
-	}.Encode()
-	if rr.Header().Get("Location") != location {
+	if rr.Header().Get("Location") != auth.ErrorURL(params["redirect_uri"][0], auth.ErrInvalidRequest, "response_type is missing or invalid", params["state"][0]) {
 		t.Errorf("unexpected location: %v", rr.Header().Get("Location"))
 	}
 }
@@ -348,11 +338,7 @@ func TestAuthDuplicateParams(t *testing.T) {
 	if rr.Code != http.StatusFound {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	location := params["redirect_uri"][0] + "?" + url.Values{
-		"error":             {"invalid_request"},
-		"error_description": {"duplicate parameters found"},
-	}.Encode()
-	if rr.Header().Get("Location") != location {
+	if rr.Header().Get("Location") != auth.ErrorURL(params["redirect_uri"][0], auth.ErrInvalidRequest, "duplicate parameters found", "") {
 		t.Errorf("unexpected location: %v", rr.Header().Get("Location"))
 	}
 }
@@ -368,12 +354,7 @@ func TestAuthNoResponseType(t *testing.T) {
 	if rr.Code != http.StatusFound {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	location := params["redirect_uri"][0] + "?" + url.Values{
-		"error":             {"invalid_request"},
-		"error_description": {"response_type is missing or invalid"},
-		"state":             params["state"],
-	}.Encode()
-	if rr.Header().Get("Location") != location {
+	if rr.Header().Get("Location") != auth.ErrorURL(params["redirect_uri"][0], auth.ErrInvalidRequest, "response_type is missing or invalid", params["state"][0]) {
 		t.Errorf("unexpected location: %v", rr.Header().Get("Location"))
 	}
 }
@@ -390,12 +371,7 @@ func TestAuthUnknownResponseType(t *testing.T) {
 	if rr.Code != http.StatusFound {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	location := params["redirect_uri"][0] + "?" + url.Values{
-		"error":             {"invalid_request"},
-		"error_description": {"response_type is missing or invalid"},
-		"state":             params["state"],
-	}.Encode()
-	if rr.Header().Get("Location") != location {
+	if rr.Header().Get("Location") != auth.ErrorURL(params["redirect_uri"][0], auth.ErrInvalidRequest, "response_type is missing or invalid", params["state"][0]) {
 		t.Errorf("unexpected location: %v", rr.Header().Get("Location"))
 	}
 }
@@ -412,12 +388,7 @@ func TestAuthUnsupportedResponseType(t *testing.T) {
 	if rr.Code != http.StatusFound {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	location := params["redirect_uri"][0] + "?" + url.Values{
-		"error":             {"unsupported_response_type"},
-		"error_description": {"response_type not supported"},
-		"state":             params["state"],
-	}.Encode()
-	if rr.Header().Get("Location") != location {
+	if rr.Header().Get("Location") != auth.ErrorURL(params["redirect_uri"][0], auth.ErrUnsupportedResponseType, "response_type not supported", params["state"][0]) {
 		t.Errorf("unexpected location: %v", rr.Header().Get("Location"))
 	}
 }
