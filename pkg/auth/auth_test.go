@@ -49,10 +49,25 @@ func init() {
 	//ath.AddIdentityProvider("???", p)
 }
 
-func newAuthRequest(t *testing.T /*, method, accept string, params url.Values*/) *http.Request {
+type Option func(*http.Request)
+
+func withMethod(method string) Option {
+	return func(req *http.Request) { req.Method = method }
+}
+func withAccept(accept string) Option {
+	return func(req *http.Request) { req.Header.Set("Accept", accept) }
+}
+func withParams(params url.Values) Option {
+	return func(req *http.Request) { req.URL.RawQuery = params.Encode() }
+}
+
+func newAuthRequest(t *testing.T, opts ...Option) *http.Request {
 	req, err := http.NewRequest("GET", "/auth", nil)
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, opt := range opts {
+		opt(req)
 	}
 	return req
 }
@@ -87,8 +102,7 @@ func TestAuthNoAccept(t *testing.T) {
 }
 
 func TestAuthInvalidAccept(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "image/png")
+	req := newAuthRequest(t, withAccept("image/png"))
 
 	rr := serveAuthRequest(req, t) // 405 method not allowed
 	if rr.Code != http.StatusNotAcceptable {
@@ -101,9 +115,7 @@ func TestAuthInvalidAccept(t *testing.T) {
 
 func TestAuthInvalidMethod(t *testing.T) {
 	for _, method := range []string{"HEAD", "PUT"} {
-		req := newAuthRequest(t)
-		req.Header.Set("Accept", "application/json")
-		req.Method = method
+		req := newAuthRequest(t, withMethod(method), withAccept("application/json"))
 
 		rr := serveAuthRequest(req, t) // 400 http.Request.ParseForm() failed
 		if rr.Code != http.StatusMethodNotAllowed {
@@ -116,10 +128,10 @@ func TestAuthInvalidMethod(t *testing.T) {
 }
 
 func TestAuthNonParsableRequest(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
-	params := url.Values{"client_id": []string{"test-client"}}
-	req.URL.RawQuery = params.Encode() + "%"
+	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+		"client_id": []string{"test-client"},
+	}))
+	req.URL.RawQuery = req.URL.RawQuery + "%"
 
 	rr := serveAuthRequest(req, t) // 400 http.Request.ParseForm() failed
 	if rr.Code != http.StatusBadRequest {
@@ -131,10 +143,7 @@ func TestAuthNonParsableRequest(t *testing.T) {
 }
 
 func TestAuthNoClientId(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
-	params := url.Values{}
-	req.URL.RawQuery = params.Encode()
+	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{}))
 
 	rr := serveAuthRequest(req, t) // 400 client_id is missing or included more than once
 	if rr.Code != http.StatusBadRequest {
@@ -146,10 +155,9 @@ func TestAuthNoClientId(t *testing.T) {
 }
 
 func TestAuthEmptyClientId(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
-	params := url.Values{"client_id": []string{""}}
-	req.URL.RawQuery = params.Encode()
+	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+		"client_id": []string{""},
+	}))
 
 	rr := serveAuthRequest(req, t) // 400 client_id is missing or included more than once
 	if rr.Code != http.StatusBadRequest {
@@ -161,10 +169,9 @@ func TestAuthEmptyClientId(t *testing.T) {
 }
 
 func TestAuthMultipleClientId(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
-	params := url.Values{"client_id": []string{"test-client", "test-client"}}
-	req.URL.RawQuery = params.Encode()
+	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+		"client_id": []string{"test-client", "test-client"},
+	}))
 
 	rr := serveAuthRequest(req, t) // 400 client_id is missing or included more than once
 	if rr.Code != http.StatusBadRequest {
@@ -176,10 +183,9 @@ func TestAuthMultipleClientId(t *testing.T) {
 }
 
 func TestAuthUnknownClientId(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
-	params := url.Values{"client_id": []string{"unknown-client"}}
-	req.URL.RawQuery = params.Encode()
+	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+		"client_id": []string{"unknown-client"},
+	}))
 
 	rr := serveAuthRequest(req, t) // 400 client_id not registered
 	if rr.Code != http.StatusBadRequest {
@@ -191,14 +197,12 @@ func TestAuthUnknownClientId(t *testing.T) {
 }
 
 func TestAuthMultipleRedirectUri(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
-	params := url.Values{
+	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
 		"client_id": []string{"test-client"},
 		"redirect_uri": []string{
 			"http://test-client.net/callback",
-			"http://test-client.net/callback"}}
-	req.URL.RawQuery = params.Encode()
+			"http://test-client.net/callback"},
+	}))
 
 	rr := serveAuthRequest(req, t) // 400 redirect_uri is included more than once
 	if rr.Code != http.StatusBadRequest {
@@ -210,12 +214,10 @@ func TestAuthMultipleRedirectUri(t *testing.T) {
 }
 
 func TestAuthNonParsableRedirectUri(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
-	params := url.Values{
+	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
 		"client_id":    []string{"test-client"},
-		"redirect_uri": []string{"http://test-client.net/callback%"}}
-	req.URL.RawQuery = params.Encode()
+		"redirect_uri": []string{"http://test-client.net/callback%"},
+	}))
 
 	rr := serveAuthRequest(req, t) // 400 url.QueryUnescape() failed
 	if rr.Code != http.StatusBadRequest {
@@ -227,12 +229,10 @@ func TestAuthNonParsableRedirectUri(t *testing.T) {
 }
 
 func TestAuthUnknownRedirectUri(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
-	params := url.Values{
+	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
 		"client_id":    []string{"test-client"},
-		"redirect_uri": []string{"http://test-client.net/unknown-callback"}}
-	req.URL.RawQuery = params.Encode()
+		"redirect_uri": []string{"http://test-client.net/unknown-callback"},
+		}))
 
 	rr := serveAuthRequest(req, t) // 400 redirect_uri is mismatched
 	if rr.Code != http.StatusBadRequest {
@@ -244,10 +244,9 @@ func TestAuthUnknownRedirectUri(t *testing.T) {
 }
 
 func TestAuthNoRedirectUri(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
-	params := url.Values{"client_id": []string{"test-client"}}
-	req.URL.RawQuery = params.Encode()
+	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+		"client_id": []string{"test-client"},
+		}))
 
 	rr := serveAuthRequest(req, t) // 400 redirect_uri is missing
 	if rr.Code != http.StatusBadRequest {
@@ -259,10 +258,10 @@ func TestAuthNoRedirectUri(t *testing.T) {
 }
 
 func TestAuthEmptyRedirectUri(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
-	params := url.Values{"client_id": []string{"test-client"}, "redirect_uri": []string{""}}
-	req.URL.RawQuery = params.Encode()
+	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
+		"client_id": []string{"test-client"},
+		"redirect_uri": []string{""},
+	}))
 
 	rr := serveAuthRequest(req, t) // 400 redirect_uri is missing
 	if rr.Code != http.StatusBadRequest {
@@ -276,14 +275,12 @@ func TestAuthEmptyRedirectUri(t *testing.T) {
 // TODO(k15tfu): func TestAuthDefaultRedirectUri(t *testing.T) {}
 
 func TestAuthEmptyParam(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
 	params := url.Values{
 		"client_id":     []string{"test-client"},
 		"redirect_uri":  []string{"http://test-client.net/callback"},
 		"response_type": []string{""},
 		"state":         []string{"test-state"}}
-	req.URL.RawQuery = params.Encode()
+	req := newAuthRequest(t, withAccept("application/json"), withParams(params))
 
 	rr := serveAuthRequest(req, t) // 302 invalid_request response_type is missing or invalid
 	if rr.Code != http.StatusFound {
@@ -300,14 +297,12 @@ func TestAuthEmptyParam(t *testing.T) {
 }
 
 func TestAuthUnknownParam(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
 	params := url.Values{
 		"client_id":     []string{"test-client"},
 		"redirect_uri":  []string{"http://test-client.net/callback"},
 		"unknown-param": []string{"1", "2"},
 		"state":         []string{"test-state"}}
-	req.URL.RawQuery = params.Encode()
+	req := newAuthRequest(t, withAccept("application/json"), withParams(params))
 
 	rr := serveAuthRequest(req, t) // 302 invalid_request response_type is missing or invalid
 	if rr.Code != http.StatusFound {
@@ -324,13 +319,11 @@ func TestAuthUnknownParam(t *testing.T) {
 }
 
 func TestAuthDuplicateParams(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
 	params := url.Values{
 		"client_id":    []string{"test-client"},
 		"redirect_uri": []string{"http://test-client.net/callback"},
 		"state":        []string{"1", "2"}}
-	req.URL.RawQuery = params.Encode()
+	req := newAuthRequest(t, withAccept("application/json"), withParams(params))
 
 	rr := serveAuthRequest(req, t) // 302 invalid_request duplicate parameters found
 	if rr.Code != http.StatusFound {
@@ -346,13 +339,11 @@ func TestAuthDuplicateParams(t *testing.T) {
 }
 
 func TestAuthNoResponseType(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
 	params := url.Values{
 		"client_id":    []string{"test-client"},
 		"redirect_uri": []string{"http://test-client.net/callback"},
 		"state":        []string{"test-state"}}
-	req.URL.RawQuery = params.Encode()
+	req := newAuthRequest(t, withAccept("application/json"), withParams(params))
 
 	rr := serveAuthRequest(req, t) // 302 invalid_request duplicate parameters found
 	if rr.Code != http.StatusFound {
@@ -369,14 +360,12 @@ func TestAuthNoResponseType(t *testing.T) {
 }
 
 func TestAuthUnknownResponseType(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
 	params := url.Values{
 		"client_id":     []string{"test-client"},
 		"redirect_uri":  []string{"http://test-client.net/callback"},
 		"response_type": []string{"unknown-type"},
 		"state":         []string{"test-state"}}
-	req.URL.RawQuery = params.Encode()
+	req := newAuthRequest(t, withAccept("application/json"), withParams(params))
 
 	rr := serveAuthRequest(req, t) // 302 invalid_request duplicate parameters found
 	if rr.Code != http.StatusFound {
@@ -393,14 +382,12 @@ func TestAuthUnknownResponseType(t *testing.T) {
 }
 
 func TestAuthUnsupportedResponseType(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
 	params := url.Values{
 		"client_id":     []string{"test-client"},
 		"redirect_uri":  []string{"http://test-client.net/callback"},
 		"response_type": []string{"token"},
 		"state":         []string{"test-state"}}
-	req.URL.RawQuery = params.Encode()
+	req := newAuthRequest(t, withAccept("application/json"), withParams(params))
 
 	rr := serveAuthRequest(req, t) // 302 invalid_request duplicate parameters found
 	if rr.Code != http.StatusFound {
@@ -417,14 +404,12 @@ func TestAuthUnsupportedResponseType(t *testing.T) {
 }
 
 func TestAuthSuccess(t *testing.T) {
-	req := newAuthRequest(t)
-	req.Header.Set("Accept", "application/json")
-	params := url.Values{
+	req := newAuthRequest(t, withAccept("application/json"), withParams(url.Values{
 		"client_id":     []string{"test-client"},
 		"redirect_uri":  []string{"http://test-client.net/callback"},
 		"response_type": []string{"code"},
-		"state":         []string{"test-state"}}
-	req.URL.RawQuery = params.Encode()
+		"state":         []string{"test-state"},
+	}))
 
 	rr := serveAuthRequest(req, t)
 	if rr.Code != http.StatusOK {
