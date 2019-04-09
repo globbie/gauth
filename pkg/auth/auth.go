@@ -271,6 +271,7 @@ func (a *Auth) AuthorizationHandler() http.Handler {
 		v, err := a.ViewRouter.NegotiateView(specs)
 		if err != nil {
 			http.Error(w, "Not Acceptable", http.StatusNotAcceptable)
+			log.Printf("406 Accept is missing or invalid, accept: %v", r.Header.Get("Accept"))
 			return
 		}
 

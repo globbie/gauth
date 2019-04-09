@@ -114,20 +114,23 @@ func serveTokenRequest(req *http.Request, t *testing.T) *httptest.ResponseRecord
 func TestAuthNoAccept(t *testing.T) {
 	req := newAuthRequest(t)
 
-	rr := serveAuthRequest(req, t) // Not Acceptable
+	rr := serveAuthRequest(req, t) // 406 Accept is missing or invalid
 	if rr.Code != http.StatusNotAcceptable {
 		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if !strings.HasPrefix(rr.Body.String(), "Not Acceptable") {
+		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
 
 func TestAuthInvalidAccept(t *testing.T) {
 	req := newAuthRequest(t, withAccept("image/png"))
 
-	rr := serveAuthRequest(req, t) // 405 method not allowed
+	rr := serveAuthRequest(req, t) // 406 Accept is missing or invalid
 	if rr.Code != http.StatusNotAcceptable {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if rr.Body.String() != "Not Acceptable\n" {
+	if !strings.HasPrefix(rr.Body.String(), "Not Acceptable") {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
