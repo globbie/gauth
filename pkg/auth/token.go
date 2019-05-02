@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// todo(n.rodionov): move all token related entities into separate package
 type Claims struct {
 	*jwt.StandardClaims
 	Email string `json:"email,omitempty"`
