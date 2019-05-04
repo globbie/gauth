@@ -456,7 +456,20 @@ func TestTokenBasicAuthNoClientId(t *testing.T) {
 	}
 }
 
-// func TestTokenBasicAuthNonParsableClientId(t *testing.T) {} // ??
+func TestTokenBasicAuthNonParsableClientId(t *testing.T) {
+	req := newTokenRequest(t, withBasicAuth("%", ""))
+
+	rr := serveTokenRequest(req, t) // 401 invalid_client Authorization is missing or invalid
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Header().Get("WWW-Authenticate") != "Basic" {
+		t.Errorf("unexpected WWW-Authenticate: %v", rr.Header().Get("WWW-Authenticate"))
+	}
+	if !strings.HasPrefix(rr.Body.String(), auth.ErrorContent(auth.ErrTknInvalidClient, "auth is missing or invalid")) {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
 
 func TestTokenBasicAuthUnknownClientId(t *testing.T) {
 	req := newTokenRequest(t, withBasicAuth("unknown-client", ""))
@@ -476,16 +489,29 @@ func TestTokenBasicAuthUnknownClientId(t *testing.T) {
 func TestTokenBasicAuthNoClientSecret(t *testing.T) {
 	req := newTokenRequest(t, withBasicAuth("test-client", ""))
 
-	rr := serveTokenRequest(req, t) // 400 invalid_request http.Request.ParseForm() failed
-	if rr.Code != http.StatusBadRequest {
+	rr := serveTokenRequest(req, t) // 401 invalid_client client_secret is mismatched
+	if rr.Code != http.StatusUnauthorized {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if !strings.HasPrefix(rr.Body.String(), auth.ErrorContent(auth.ErrTknInvalidRequest, "non-parsable request")) {
+	if !strings.HasPrefix(rr.Body.String(), auth.ErrorContent(auth.ErrTknInvalidClient, "auth is missing or invalid")) {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
 
-// func TestTokenBasicAuthNonParsableClientSecret(t *testing.T) {} // ??
+func TestTokenBasicAuthNonParsableClientSecret(t *testing.T) {
+	req := newTokenRequest(t, withBasicAuth("test-client", "%"))
+
+	rr := serveTokenRequest(req, t) // 401 invalid_client Authorization is missing or invalid
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("unexpected status code: %v", rr.Code)
+	}
+	if rr.Header().Get("WWW-Authenticate") != "Basic" {
+		t.Errorf("unexpected WWW-Authenticate: %v", rr.Header().Get("WWW-Authenticate"))
+	}
+	if !strings.HasPrefix(rr.Body.String(), auth.ErrorContent(auth.ErrTknInvalidClient, "auth is missing or invalid")) {
+		t.Errorf("unexpected body: %v", rr.Body)
+	}
+}
 
 func TestTokenNonParsableRequest(t *testing.T) {
 	req := newTokenRequest(t, withBasicAuth("test-client", ""), withContentParams(url.Values{
@@ -610,11 +636,11 @@ func TestTokenAuthCodeNoCode(t *testing.T) {
 		"grant_type": {"authorization_code"},
 	}))
 
-	rr := serveTokenRequest(req, t) // 400 invalid_request code is missing or invalid
+	rr := serveTokenRequest(req, t) // 400 invalid_request checkAuthorizationCodeParams() failed
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if !strings.HasPrefix(rr.Body.String(), auth.ErrorContent(auth.ErrTknInvalidRequest, "code is missing or invalid")) {
+	if !strings.HasPrefix(rr.Body.String(), auth.ErrorContent(auth.ErrTknInvalidRequest, "'code' required")) {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -629,7 +655,7 @@ func TestTokenAuthCodeInvalidCode(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if !strings.HasPrefix(rr.Body.String(), auth.ErrorContent(auth.ErrTknInvalidGrant, "code is missing or invalid")) {
+	if !strings.HasPrefix(rr.Body.String(), auth.ErrorContent(auth.ErrTknInvalidGrant, "'code' not found")) {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -647,7 +673,7 @@ func TestTokenAuthCodeInvalidCodeOwner(t *testing.T) {
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if !strings.HasPrefix(rr.Body.String(), auth.ErrorContent(auth.ErrTknInvalidGrant, "code is missing or invalid")) {
+	if !strings.HasPrefix(rr.Body.String(), auth.ErrorContent(auth.ErrTknInvalidGrant, "'code' issued to another client")) {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }
@@ -680,11 +706,11 @@ func TestTokenAuthCodeInvalidClientId(t *testing.T) {
 		"client_id":  {"another-client"},
 	}))
 
-	rr := serveTokenRequest(req, t) // 400 invalid_grant clientID is mismatched
+	rr := serveTokenRequest(req, t) // 400 invalid_grant authCode.ClientID is mismatched
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("unexpected status code: %v", rr.Code)
 	}
-	if !strings.HasPrefix(rr.Body.String(), auth.ErrorContent(auth.ErrTknInvalidGrant, "clientID is missing or invalid")) {
+	if !strings.HasPrefix(rr.Body.String(), auth.ErrorContent(auth.ErrTknInvalidGrant, "'code' issued to another client")) {
 		t.Errorf("unexpected body: %v", rr.Body)
 	}
 }

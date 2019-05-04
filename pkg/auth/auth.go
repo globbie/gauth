@@ -404,15 +404,15 @@ func accessTokenRequestParamsNew(form url.Values) (result AccessTokenRequestPara
 	return
 }
 
-func (a *Auth) clientAuthenticate(w http.ResponseWriter, r *http.Request, params AccessTokenRequestParams) (storage.AuthCode, error) {
+func (a *Auth) clientWWWAuthenticate(w http.ResponseWriter, r *http.Request) (*Client, error) {
 	var (
-		authCode storage.AuthCode
-		err      error
+		client *Client
+		err    error
 	)
 
 	clientID, clientSecret, ok := r.BasicAuth()
 	clientID, _ = url.QueryUnescape(clientID) // TODO(k15tfu): ?? done implicitly
-	if clientSecret != "" { // client_secret can be an empty string
+	if clientSecret != "" {                   // client_secret can be an empty string
 		if clientSecret, err = url.QueryUnescape(clientSecret); err != nil { // TODO(k15tfu): ?? done implicitly
 			ok = false
 		}
@@ -421,65 +421,40 @@ func (a *Auth) clientAuthenticate(w http.ResponseWriter, r *http.Request, params
 		w.Header().Set("WWW-Authenticate", "Basic")
 		http.Error(w, ErrorContent(ErrTknInvalidClient, "auth is missing or invalid"), http.StatusUnauthorized)
 		log.Printf("401 invalid_client Authorization is missing or invalid, auth: %v", r.Header.Get("Authorization"))
-		return authCode, errors.New("authentication failed")
+		return nil, errors.New("authentication failed")
 	}
-	client, ok := a.clients[clientID]
+	client, ok = a.clients[clientID]
 	if !ok {
 		w.Header().Set("WWW-Authenticate", "Basic")
 		http.Error(w, ErrorContent(ErrTknInvalidClient, "auth is missing or invalid"), http.StatusUnauthorized)
 		log.Printf("401 invalid_client client_id not registered, client_id: %v", clientID)
-		return authCode, errors.New("authentication failed")
+		return nil, errors.New("authentication failed")
 	}
 
 	if !client.PKCE && subtle.ConstantTimeCompare([]byte(client.Secret), []byte(clientSecret)) != 1 {
 		w.Header().Set("WWW-Authenticate", "Basic")
 		http.Error(w, ErrorContent(ErrTknInvalidClient, "auth is missing or invalid"), http.StatusUnauthorized)
 		log.Printf("401 invalid_client client_secret is mismatched, clientID: %v", clientID)
-		return authCode, errors.New("authentication failed")
+		return nil, errors.New("authentication failed")
 	}
 
-	authCode, err = a.Storage.AuthCodeRead(params.AuthCodeID)
+	return client, nil
+}
+
+func (a *Auth) clientPKCEAuthenticate(w http.ResponseWriter, client *Client, v, s, t string) error {
+	c, err := NewCodeChallengeFromString(s, t)
+	if err == ErrUnsupportedTransformation {
+		http.Error(w, ErrorContent(ErrTknInvalidGrant, "'code_challenge_method' not supported"), http.StatusBadRequest)
+		log.Printf("400 invalid_grant code_challenge_method not supported, code_challenge_method: %v", t)
+		return errors.New("authentication failed")
+	}
+	err = CompareVerifierAndChallenge(CodeVerifier(v), c)
 	if err != nil {
-		http.Error(w, ErrorContent(ErrTknInvalidGrant, "code is missing or invalid"), http.StatusBadRequest)
-		log.Printf("400 invalid_grant storage.Storage.AuthCodeRead() failed, err: %v", err)
-		return authCode, err
+		http.Error(w, ErrorContent(ErrTknInvalidGrant, "'code_verifier' mismatched"), http.StatusBadRequest)
+		log.Printf("400 invalid_grant code_verifier is mismatched, clientID: %v", client.ID)
+		return errors.New("authentication failed")
 	}
-	if authCode.ClientID != client.ID {
-		http.Error(w, ErrorContent(ErrTknInvalidGrant, "code is missing or invalid"), http.StatusBadRequest)
-		log.Printf("400 invalid_grant authCode.ClientID is mismatched, authCode.ClientID: %v client.ID: %v", authCode.ClientID, client.ID)
-		return authCode, errors.New("authentication failed")
-	}
-
-	if params.ClientID == "" {
-		// clientID is required only if for unauthenticated client (See 3.2.1.)
-	} else if params.ClientID != client.ID {
-		// TODO(k15tfu): ?? invalid_grant or invalid_client or invalid_request
-		http.Error(w, ErrorContent(ErrTknInvalidGrant, "clientID is missing or invalid"), http.StatusBadRequest)
-		log.Printf("400 invalid_grant clientID is mismatched, clientID: %v client.ID: %v", params.ClientID, client.ID)
-		return authCode, errors.New("authentication failed")
-	}
-
-	if client.PKCE {
-		codeVerifier := params.CodeVerifier
-		if codeVerifier == "" {
-			http.Error(w, ErrorContent(ErrTknInvalidGrant, "code_verifier is missing or invalid"), http.StatusBadRequest) // FIXME(k15tfu): ?? invalid_grant or invalid_request
-			log.Printf("400 invalid_grant code_verifier is missing or invalid, form: %v", r.PostForm)
-			return authCode, errors.New("authentication failed")
-		}
-		codeChallenge, err := NewCodeChallengeFromString(codeVerifier, authCode.CodeChallengeMethod)
-		if err == ErrUnsupportedTransformation {
-			http.Error(w, ErrorContent(ErrTknInvalidGrant, "code_challenge_method not supported"), http.StatusBadRequest)
-			log.Printf("400 invalid_grant code_challenge_method not supported, code_challenge_method: %v", authCode.CodeChallengeMethod)
-			return authCode, errors.New("authentication failed")
-		}
-		err = CompareVerifierAndChallenge(CodeVerifier(codeVerifier), codeChallenge)
-		if err != nil {
-			http.Error(w, ErrorContent(ErrTknInvalidGrant, "code_verifier is missing or invalid"), http.StatusBadRequest)
-			log.Printf("400 invalid_grant code_verifier is mismatched, clientID: %v", clientID)
-			return authCode, errors.New("authentication failed")
-		}
-	}
-	return authCode, nil
+	return nil
 }
 
 // TODO(k15tfu):
@@ -517,29 +492,112 @@ func (a *Auth) TokenHandler() http.Handler {
 			log.Printf("400 invalid_request accessTokenRequestParamsNew() failed, err: %v", err)
 			return
 		}
-		authCode, err := a.clientAuthenticate(w, r, params)
+
+		client, err := a.clientWWWAuthenticate(w, r)
 		if err != nil {
 			return // error has already been reported
 		}
 
 		switch params.GrantType {
 		case "authorization_code":
+			if err := a.checkAuthorizationCodeParams(client, params); err != nil {
+				http.Error(w, ErrorContent(ErrTknInvalidRequest, err.Error()), http.StatusBadRequest)
+				log.Printf("400 invalid_request checkAuthorizationCodeParams() failed, err: %v", err)
+				return
+			}
+
+			authCode, err := a.validateAuthorizationCodeGrant(w, client, params)
+			if err != nil {
+				return // error has already been reported
+			}
+
 			a.handleAuthorizationCode(w, r, authCode, params)
 		case "refresh_token":
+			if err := a.checkAuthorizationCodeParams(client, params); err != nil {
+				http.Error(w, ErrorContent(ErrTknInvalidRequest, err.Error()), http.StatusBadRequest)
+				log.Printf("400 invalid_request checkAuthorizationCodeParams() failed, err: %v", err)
+				return
+			}
+
+			authCode, err := a.validateAuthorizationCodeGrant(w, client, params)
+			if err != nil {
+				return // error has already been reported
+			}
+
 			a.handleRefreshToken(w, r, authCode, params)
+		case "password", "client_credentials":
+			http.Error(w, ErrorContent(ErrTknUnsupportedGrantType, "grant_type not supported"), http.StatusBadRequest)
+			log.Printf("400 invalid_request grant_type not supported, grant_type: %v", params.GrantType)
+			return
 		default:
-			http.Error(w, ErrorContent(ErrTknUnsupportedGrantType, "unsupported grant type"), http.StatusBadRequest)
-			log.Println("unrecognized grant_type:", params.GrantType)
+			http.Error(w, ErrorContent(ErrTknInvalidRequest, "grant_type is missing or invalid"), http.StatusBadRequest)
+			log.Printf("400 invalid_request grant_type is missing or invalid, form: %v", r.PostForm)
 			return
 		}
 	})
 }
 
-func (a *Auth) handleAuthorizationCode(w http.ResponseWriter, r *http.Request, authCode storage.AuthCode, params AccessTokenRequestParams) {
-	a.issueToken(w, r, authCode, params)
+func (a *Auth) checkAuthorizationCodeParams(client *Client, params AccessTokenRequestParams) error {
+	if params.AuthCodeID == "" {
+		return errors.New("'code' required")
+	}
+
+	// TODO(k15tfu):
+	//   redirect_uri
+	//         REQUIRED, if the "redirect_uri" parameter was included in the
+	//         authorization request as described in Section 4.1.1, and their
+	//         values MUST be identical.
+	_ = params.RedirectURI
+
+	if client.PKCE && params.CodeVerifier == "" {
+		return errors.New("'code_verifier' required")
+	}
+
+	return nil
 }
 
-func (a *Auth) handleRefreshToken(w http.ResponseWriter, r *http.Request, authCode storage.AuthCode, params AccessTokenRequestParams) {
+func (a *Auth) validateAuthorizationCodeGrant(w http.ResponseWriter, client *Client, params AccessTokenRequestParams) (*storage.AuthCode, error) {
+	authCode, err := a.Storage.AuthCodeRead(params.AuthCodeID)
+	if err != nil {
+		http.Error(w, ErrorContent(ErrTknInvalidGrant, "'code' not found"), http.StatusBadRequest)
+		log.Printf("400 invalid_grant storage.Storage.AuthCodeRead() failed, err: %v", err)
+		return nil, errors.New("authentication failed")
+	}
+
+	if authCode.ClientID != client.ID {
+		http.Error(w, ErrorContent(ErrTknInvalidGrant, "'code' issued to another client"), http.StatusBadRequest)
+		log.Printf("400 invalid_grant authCode.ClientID is mismatched, authCode.ClientID: %v clientID: %v", authCode.ClientID, client.ID)
+		return nil, errors.New("authentication failed")
+	}
+	if authCode.ClientID != params.ClientID && params.ClientID != "" {
+		// clientID is required only for unauthenticated client (See 3.2.1.)
+		http.Error(w, ErrorContent(ErrTknInvalidGrant, "'code' issued to another client"), http.StatusBadRequest)
+		log.Printf("400 invalid_grant authCode.ClientID is mismatched, authCode.ClientID: %v client_id: %v", authCode.ClientID, params.ClientID)
+		return nil, errors.New("authentication failed")
+	}
+
+	// TODO(k15tfu):
+	//   redirect_uri
+	//         REQUIRED, if the "redirect_uri" parameter was included in the
+	//         authorization request as described in Section 4.1.1, and their
+	//         values MUST be identical.
+	_ = params.RedirectURI
+
+	if client.PKCE {
+		err = a.clientPKCEAuthenticate(w, client, params.CodeVerifier, authCode.CodeChallenge, authCode.CodeChallengeMethod)
+		if err != nil {
+			return nil, errors.New("authentication failed")
+		}
+	}
+
+	return &authCode, nil
+}
+
+func (a *Auth) handleAuthorizationCode(w http.ResponseWriter, r *http.Request, authCode *storage.AuthCode, params AccessTokenRequestParams) {
+	a.issueToken(w, r, *authCode, params)
+}
+
+func (a *Auth) handleRefreshToken(w http.ResponseWriter, r *http.Request, authCode *storage.AuthCode, params AccessTokenRequestParams) {
 	refreshToken, err := a.RefreshTokenRepository.Read(params.RefreshToken)
 	if err == ErrNotFound {
 		http.Error(w, "Not Found", http.StatusNotFound)
@@ -557,7 +615,7 @@ func (a *Auth) handleRefreshToken(w http.ResponseWriter, r *http.Request, authCo
 		return
 	}
 
-	a.issueToken(w, r, authCode, params)
+	a.issueToken(w, r, *authCode, params)
 
 	err = a.RefreshTokenRepository.Delete(params.RefreshToken)
 	if err != nil {
