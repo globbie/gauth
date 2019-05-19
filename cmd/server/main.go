@@ -23,6 +23,8 @@ var (
 )
 
 func init() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	var configPath string
 	flag.StringVar(&configPath, "config-path", "config.json", "path to config file")
 	flag.Parse()
