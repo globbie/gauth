@@ -28,7 +28,7 @@ type Config struct {
 	Web        Web        `json:"web"`
 	Token      Token      `json:"token"`
 	Storage    Storage    `json:"storage"`
-	Repository Repository `json:"repositories"`
+	Repository Repository `json:"repository"`
 	Providers  []Provider `json:"providers"`
 	Frontend   Frontend   `json:"frontend"`
 	Clients    []Client   `json:"clients"`
