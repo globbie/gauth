@@ -37,7 +37,8 @@ func init() {
 	if err != nil {
 		log.Fatalf("could not parse config file '%s', error: %v", configPath, err)
 	}
-	signBytes, err := ioutil.ReadFile(cfg.Token.PublicKeyPath)
+
+	signBytes, err := ioutil.ReadFile(cfg.Token.PrivateKeyPath)
 	if err != nil {
 		log.Fatalln("could not open SignKey file:", err)
 	}
@@ -45,7 +46,8 @@ func init() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	verifyBytes, err := ioutil.ReadFile(cfg.Token.PrivateKeyPath)
+
+	verifyBytes, err := ioutil.ReadFile(cfg.Token.PublicKeyPath)
 	if err != nil {
 		log.Fatalln("could not open VerifyKey file:", err)
 	}
